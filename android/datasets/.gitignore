@@ -1,0 +1,7 @@
+# This directory tree (spec section 5) holds actual dataset content once real datasets are
+# acquired (see ../dataset_pipeline/DATASET_ACQUISITION.md) - never commit real image/annotation
+# data here. Only the directory skeleton (.gitkeep files) is tracked.
+*
+!*/
+!.gitignore
+!**/.gitkeep

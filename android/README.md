@@ -17,6 +17,10 @@ what's actually built versus what's still ahead, and how to build it.
   genuinely compiled and tested in CI-less environments (see NETWORK_LIMITATIONS.md).
 - `app/` — the Android application: Compose UI, Room database, CameraX capture, repositories,
   navigation. Depends on `domain`.
+- `dataset_pipeline/` — offline, Python dataset ingestion/license-control/taxonomy-mapping/QC
+  pipeline feeding the future local AI model (67 tests, genuinely run and passing - see its own
+  README.md and DATASET_ACQUISITION.md). Independent of the Android build; no real dataset has
+  been imported yet because every dataset host is network-blocked from this sandbox.
 
 ## Building
 
