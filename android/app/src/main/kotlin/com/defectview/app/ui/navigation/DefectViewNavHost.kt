@@ -51,6 +51,8 @@ import com.defectview.app.feature.inspections.NewInspectionScreen
 import com.defectview.app.feature.projects.ProjectEditScreen
 import com.defectview.app.feature.projects.ProjectListScreen
 import com.defectview.app.feature.projects.ProjectViewModel
+import com.defectview.app.feature.reportcenter.ReportsScreen
+import com.defectview.app.feature.reportcenter.ReportsViewModel
 import com.defectview.domain.model.DefectDetection
 import kotlinx.coroutines.launch
 
@@ -286,8 +288,15 @@ fun DefectViewNavHost(container: AppContainer) {
                 arguments = listOf(navArgument("defectId") { type = NavType.LongType })
             ) { entry ->
                 val defectId = entry.arguments?.getLong("defectId") ?: return@composable
+                val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
                 val vm: DefectDetailViewModel = viewModel(
-                    factory = DefectDetailViewModel.Factory(defectId, container.defectRepository)
+                    factory = DefectDetailViewModel.Factory(
+                        defectId,
+                        container.defectRepository,
+                        container.projectRepository,
+                        container.attachmentRepository,
+                        appContext
+                    )
                 )
                 DefectDetailScreen(
                     viewModel = vm,
@@ -317,10 +326,11 @@ fun DefectViewNavHost(container: AppContainer) {
             }
 
             composable(Destination.Reports.route) {
-                NotYetImplementedScreen(
-                    title = "Reports",
-                    phaseNote = "PDF report generation (Defect View, Daily Inspection, Open Defects, Defect Register, Before/After, Quality Summary) is planned for Phase 6."
+                val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                val vm: ReportsViewModel = viewModel(
+                    factory = ReportsViewModel.Factory(container.projectRepository, container.defectRepository, appContext)
                 )
+                ReportsScreen(vm)
             }
 
             composable(Destination.Settings.route) {

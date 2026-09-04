@@ -13,9 +13,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -33,6 +39,7 @@ import com.defectview.app.ui.theme.SeverityLow
 import com.defectview.app.ui.theme.SeverityMedium
 import com.defectview.domain.model.Defect
 import com.defectview.domain.model.DefectSeverity
+import com.defectview.domain.model.DefectStatus
 
 private fun severityColor(severity: DefectSeverity) = when (severity) {
     DefectSeverity.CRITICAL -> SeverityCritical
@@ -45,42 +52,72 @@ private fun severityColor(severity: DefectSeverity) = when (severity) {
 @Composable
 fun DefectListScreen(viewModel: DefectListViewModel, onDefectClick: (Defect) -> Unit) {
     val defects by viewModel.defects.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_defects)) }) }) { padding ->
-        if (defects.isEmpty()) {
-            Box(
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            OutlinedTextField(
+                value = filter.query,
+                onValueChange = { viewModel.setQuery(it) },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                label = { Text("Search defects") },
+                singleLine = true,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("No defects recorded yet. Defects are created from the Defect View editor after an inspection photo is captured and reviewed.")
+                items(DefectStatus.entries.toList()) { status ->
+                    FilterChip(
+                        selected = filter.status == status,
+                        onClick = { viewModel.setStatusFilter(if (filter.status == status) null else status) },
+                        label = { Text(status.name.replace('_', ' ')) }
+                    )
+                }
             }
-            return@Scaffold
-        }
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            items(defects, key = { it.id }) { defect ->
-                Card(onClick = { onDefectClick(defect) }, modifier = Modifier.fillMaxWidth()) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .background(severityColor(defect.severity), CircleShape)
-                        )
-                        Column(modifier = Modifier.padding(start = 12.dp)) {
-                            Text(defect.defectId, style = MaterialTheme.typography.labelLarge)
-                            Text(defect.title, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "${defect.status.name.replace('_', ' ')} · ${defect.location}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+
+            if (defects.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (filter.query.isBlank() && filter.status == null) {
+                            "No defects recorded yet. Defects are created from the Defect View editor after an inspection photo is captured and reviewed."
+                        } else {
+                            "No defects match this search/filter."
+                        }
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(defects, key = { it.id }) { defect ->
+                        Card(onClick = { onDefectClick(defect) }, modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(severityColor(defect.severity), CircleShape)
+                                )
+                                Column(modifier = Modifier.padding(start = 12.dp)) {
+                                    Text(defect.defectId, style = MaterialTheme.typography.labelLarge)
+                                    Text(defect.title, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "${defect.status.name.replace('_', ' ')} · ${defect.location}",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="inspection_photos" path="inspection_photos/" />
+    <files-path name="reports" path="reports/" />
     <cache-path name="camera_temp" path="camera_temp/" />
 </paths>

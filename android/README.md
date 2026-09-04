@@ -38,7 +38,7 @@ automatically.
 | 3 | Local vision engine, AI result interface, confidence handling | Done and tested: `ClassicalVisionEngine` (`domain/vision`), `AIAnalysis`/`AIDetection` persistence, "Analyze image" wired into New Inspection with spec-safe confidence language, AI detections now pre-populate the editor (see Phase 4) |
 | 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); AI detections seed editable annotations and prefill the Defect Form via the reasoning engine; `ProjectKnowledgeEntity`/DAO/Repository is a real, working data layer wired as an optional reasoning input - no management UI yet; inspection templates not started - see gaps below |
 | 5 | Verified learning, similarity search, Learning Center, model versioning | Done and tested at the domain level (`domain/learning`, `SimpleFeatureExtractor`); app-level wiring complete: saving a defect from an AI suggestion records a `VerifiedExampleEntity` (APPROVED/CORRECTED) and enqueues it, the Learning Center screen shows stats/queue/version history and can run a local learning update and roll back - see gaps below |
-| 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done; PDF reports not started |
+| 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done (Phase 1); 2 of 6 PDF report types implemented with `android.graphics.pdf.PdfDocument` (Individual Defect View, Defect Register), both generated from live Room records and shareable via the standard Android share sheet; search/filter (query + status) added to the Defects list - see gaps below |
 | 7 | Tests, offline validation, production packaging | Domain unit tests real and passing; app-module instrumented tests not started; no APK has been produced or run |
 
 Nothing in this table is a placeholder button — every "not started" item is either absent from
@@ -110,3 +110,18 @@ an explicit "not yet implemented, here's what's planned" screen rather than a fa
 - The approve-vs-corrected judgment in `DefectFormViewModel.recordVerifiedExample` is a rough
   proxy (whether the saved trade differs from the AI's) - it doesn't consider whether title,
   category, or severity were also changed.
+
+### Phase 6 known gaps
+
+- **4 of the spec's 6 report types are not implemented**: Daily Inspection Report, Open Defects
+  Report, Before/After Report, Project Quality Summary. `DefectViewPdfGenerator` (per-defect) and
+  `DefectRegisterPdfGenerator` (per-project table) are real and complete; the other four would
+  follow the same `PdfDocument` + `StaticLayout` pattern but nothing has been written for them.
+- **Search/filter only covers the Defects list.** Projects and Inspections both already expose a
+  DAO-level `search(query)` (Phase 1), but no screen calls it - Project and Inspection lists are
+  still unfiltered.
+- **"Export" is PDF sharing only**, via the standard Android share sheet
+  (`Intent.ACTION_SEND` + `FileProvider`) - there is no CSV/JSON data export of the underlying
+  records, and no bulk "export all reports" action.
+- No project logo is drawn in either PDF - `Project.logoPath` exists in the schema but nothing
+  in the app lets an inspector set one yet, so the reports always render without one.

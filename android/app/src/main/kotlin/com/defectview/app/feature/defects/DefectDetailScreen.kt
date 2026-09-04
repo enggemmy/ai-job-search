@@ -32,7 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.defectview.app.ui.theme.SeverityCritical
@@ -133,6 +135,8 @@ fun DefectDetailScreen(
                     Text("Verify & Close")
                 }
             }
+
+            ReportSection(viewModel)
         }
     }
 
@@ -144,6 +148,50 @@ fun DefectDetailScreen(
             },
             onDismiss = { showCloseDialog = false }
         )
+    }
+}
+
+@Composable
+private fun ReportSection(viewModel: DefectDetailViewModel) {
+    val context = LocalContext.current
+    val reportState by viewModel.reportState.collectAsStateWithLifecycle()
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Report", style = MaterialTheme.typography.titleMedium)
+        when (val state = reportState) {
+            is DefectDetailViewModel.ReportState.Idle -> {
+                OutlinedButton(onClick = { viewModel.generateReport() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Generate PDF Report")
+                }
+            }
+            is DefectDetailViewModel.ReportState.Generating -> Text("Generating report…")
+            is DefectDetailViewModel.ReportState.Ready -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            val file = java.io.File(state.filePath)
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "application/pdf"
+                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(intent, "Share Defect View report"))
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Share PDF") }
+                    OutlinedButton(onClick = { viewModel.resetReportState() }, modifier = Modifier.weight(1f)) {
+                        Text("Regenerate")
+                    }
+                }
+            }
+            is DefectDetailViewModel.ReportState.Error -> {
+                Text(state.message, color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { viewModel.generateReport() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Try again")
+                }
+            }
+        }
     }
 }
 
