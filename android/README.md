@@ -39,11 +39,46 @@ automatically.
 | 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); AI detections seed editable annotations and prefill the Defect Form via the reasoning engine; `ProjectKnowledgeEntity`/DAO/Repository is a real, working data layer wired as an optional reasoning input - no management UI yet; inspection templates not started - see gaps below |
 | 5 | Verified learning, similarity search, Learning Center, model versioning | Done and tested at the domain level (`domain/learning`, `SimpleFeatureExtractor`); app-level wiring complete: saving a defect from an AI suggestion records a `VerifiedExampleEntity` (APPROVED/CORRECTED) and enqueues it, the Learning Center screen shows stats/queue/version history and can run a local learning update and roll back - see gaps below |
 | 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done (Phase 1); 2 of 6 PDF report types implemented with `android.graphics.pdf.PdfDocument` (Individual Defect View, Defect Register), both generated from live Room records and shareable via the standard Android share sheet; search/filter (query + status) added to the Defects list - see gaps below |
-| 7 | Tests, offline validation, production packaging | Domain unit tests real and passing; app-module instrumented tests not started; no APK has been produced or run |
+| 7 | Tests, offline validation, production packaging | Domain: 64 unit tests, genuinely run, 0 failures. App: one instrumented Room test class added (`DefectDaoTest` - real SQLite round-trips, enum converters, cascade delete, count queries) but **not run** - no emulator/device in this sandbox, see below. No APK has ever been produced. Offline-by-construction verified by inspection (see below), not by running the app |
 
 Nothing in this table is a placeholder button — every "not started" item is either absent from
 the nav graph or, where the nav destination exists (Learning Center, Reports, Settings), it shows
 an explicit "not yet implemented, here's what's planned" screen rather than a fake control.
+
+## Overall status - read this before trusting any "done" above
+
+This is a large, multi-thousand-line codebase built across seven phases in one sitting, in a
+sandbox that cannot compile the `app` module at all (see NETWORK_LIMITATIONS.md) and has no
+Android emulator. Two different kinds of confidence are mixed together in this file, and they
+should not be treated the same:
+
+- **`domain/` is genuinely verified.** 64 unit tests, run repeatedly in this sandbox via
+  `gradle :domain:test`, currently 0 failures. Every domain-level claim in this README ("real
+  classical-CV signal, not random," "confidence never implies certainty," "learning-queue
+  transitions are enforced," etc.) is backed by a test that actually executed.
+- **`app/` is careful, reviewed-by-hand Kotlin/Compose/Room code that has never compiled.**
+  Every file was written against the pinned library versions and re-read for API correctness
+  (several real bugs were caught this way and are visible in the git history - a wrong Compose
+  extension-function import, an illegal non-local `return` through a non-inline lambda, a
+  `List.single()` name collision with the Kotlin stdlib, a redirect-following network check that
+  changed the whole project's architecture). That process catches real classes of mistakes; it
+  does not catch everything a compiler does. Treat every `app/`-module claim in the phase table
+  as "should work, not yet proven" until it's opened in Android Studio or built on a machine with
+  normal internet access.
+
+**Offline-by-construction, verified without running the app:** the manifest declares only the
+`CAMERA` permission (no `INTERNET`, so the OS itself blocks any network call even if code tried
+to make one); `app/build.gradle.kts` has no HTTP/network/cloud dependency (no Retrofit, OkHttp,
+Firebase, etc.); and a full-source grep for URL/socket/HTTP APIs across `app/src` returns
+nothing. This is a structural guarantee, not a promise - the app cannot phone home even by
+accident.
+
+**What a from-scratch verification pass should do, in order:** open `android/` in Android
+Studio, let it sync (this is where AndroidX/Compose/Room/CameraX/AGP actually get resolved and
+compiled for the first time), fix whatever the compiler finds, run `:app:assembleDebug`, install
+the APK, and manually walk the golden path (create a project → new inspection → capture photo →
+analyze → editor → defect form → detail → generate PDF → Learning Center). Every phase's "known
+gaps" section above says exactly what won't work yet when you get there.
 
 ### Phase 2 known gaps
 
