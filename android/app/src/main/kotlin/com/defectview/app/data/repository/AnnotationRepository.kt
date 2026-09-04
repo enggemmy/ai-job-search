@@ -19,7 +19,7 @@ class AnnotationRepository(private val annotationDao: AnnotationDao) {
                 colorArgb = draft.colorArgb,
                 points = draft.points,
                 strokeWidth = draft.strokeWidth,
-                createdByAi = false,
+                createdByAi = draft.createdByAi,
                 orderIndex = index
             )
         }

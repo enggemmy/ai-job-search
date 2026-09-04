@@ -34,6 +34,7 @@ import com.defectview.domain.model.DefectCategory
 import com.defectview.domain.model.DefectPriority
 import com.defectview.domain.model.DefectSeverity
 import com.defectview.domain.model.Trade
+import com.defectview.domain.reasoning.ReasoningResult
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,16 +79,19 @@ fun DefectFormScreen(
     originalPhotoPath: String,
     annotations: List<AnnotationDraft>,
     reportedBy: String,
+    initialReasoning: ReasoningResult? = null,
     onSaved: (Defect) -> Unit,
     onCancel: () -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(DefectCategory.WORKMANSHIP) }
-    var trade by remember { mutableStateOf(Trade.MASONRY) }
-    var severity by remember { mutableStateOf(DefectSeverity.MEDIUM) }
+    var title by remember { mutableStateOf(initialReasoning?.title ?: "") }
+    var description by remember { mutableStateOf(initialReasoning?.description ?: "") }
+    var category by remember { mutableStateOf(initialReasoning?.category ?: DefectCategory.WORKMANSHIP) }
+    var trade by remember { mutableStateOf(initialReasoning?.trade ?: Trade.MASONRY) }
+    var severity by remember { mutableStateOf(initialReasoning?.suggestedSeverity ?: DefectSeverity.MEDIUM) }
     var priority by remember { mutableStateOf(DefectPriority.NORMAL) }
-    var recommendation by remember { mutableStateOf("Verify against the approved project specification and method statement.") }
+    var recommendation by remember {
+        mutableStateOf(initialReasoning?.recommendation ?: "Verify against the approved project specification and method statement.")
+    }
     var responsibleParty by remember { mutableStateOf("") }
     var inspectorComments by remember { mutableStateOf("") }
 
@@ -109,7 +113,13 @@ fun DefectFormScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Suggested — Inspector confirmation required", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+            if (initialReasoning != null) {
+                Text(
+                    "AI suggestion (${initialReasoning.confidenceDisplayText}) — fields below are a starting point, review and correct before saving.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
 
             OutlinedTextField(title, { title = it }, label = { Text("Defect title") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(description, { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
@@ -140,7 +150,7 @@ fun DefectFormScreen(
                         category = category,
                         trade = trade,
                         severity = severity,
-                        severityIsAiSuggested = false,
+                        severityIsAiSuggested = initialReasoning != null,
                         recommendation = recommendation,
                         responsibleParty = responsibleParty,
                         priority = priority,

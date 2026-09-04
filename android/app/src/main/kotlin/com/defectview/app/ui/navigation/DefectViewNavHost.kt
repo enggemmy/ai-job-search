@@ -42,12 +42,14 @@ import com.defectview.app.feature.defects.DefectListViewModel
 import com.defectview.app.feature.editor.AnnotationDraft
 import com.defectview.app.feature.editor.AnnotationEditorViewModel
 import com.defectview.app.feature.editor.DefectViewEditorScreen
+import com.defectview.app.feature.editor.toSeedAnnotationDrafts
 import com.defectview.app.feature.inspections.InspectionListScreen
 import com.defectview.app.feature.inspections.InspectionViewModel
 import com.defectview.app.feature.inspections.NewInspectionScreen
 import com.defectview.app.feature.projects.ProjectEditScreen
 import com.defectview.app.feature.projects.ProjectListScreen
 import com.defectview.app.feature.projects.ProjectViewModel
+import com.defectview.domain.model.DefectDetection
 import kotlinx.coroutines.launch
 
 private val bottomDestinations = listOf(
@@ -77,6 +79,7 @@ fun DefectViewNavHost(container: AppContainer) {
     var captureTarget by remember { mutableStateOf<CaptureTarget>(CaptureTarget.NewInspectionPhoto) }
     var draftContext by remember { mutableStateOf<DefectDraftContext?>(null) }
     var draftAnnotations by remember { mutableStateOf<List<AnnotationDraft>>(emptyList()) }
+    var draftDetections by remember { mutableStateOf<List<DefectDetection>>(emptyList()) }
     var pendingAfterPhotoPath by remember { mutableStateOf<String?>(null) }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -185,6 +188,7 @@ fun DefectViewNavHost(container: AppContainer) {
                                 location = "",
                                 photoPath = photo
                             )
+                            draftDetections = (vm.analysisState.value as? InspectionViewModel.AnalysisState.Done)?.detections.orEmpty()
                             capturedPhotoPath = null
                             navController.navigate(Destination.DefectEditor.route) {
                                 popUpTo(Destination.InspectionsForProject.route(projectId ?: 0))
@@ -216,7 +220,8 @@ fun DefectViewNavHost(container: AppContainer) {
                 if (context == null) {
                     navController.popBackStack()
                 } else {
-                    val vm: AnnotationEditorViewModel = viewModel(factory = AnnotationEditorViewModel.Factory(draftAnnotations))
+                    val initialAnnotations = draftAnnotations.ifEmpty { draftDetections.toSeedAnnotationDrafts() }
+                    val vm: AnnotationEditorViewModel = viewModel(factory = AnnotationEditorViewModel.Factory(initialAnnotations))
                     DefectViewEditorScreen(
                         imagePath = context.photoPath,
                         viewModel = vm,
@@ -227,6 +232,7 @@ fun DefectViewNavHost(container: AppContainer) {
                         onCancel = {
                             draftContext = null
                             draftAnnotations = emptyList()
+                            draftDetections = emptyList()
                             navController.popBackStack()
                         }
                     )
@@ -246,6 +252,8 @@ fun DefectViewNavHost(container: AppContainer) {
                             container.imageStorageManager
                         )
                     )
+                    val topDetection = draftDetections.maxByOrNull { it.confidenceScore }
+                    val initialReasoning = remember(topDetection) { topDetection?.let { container.reasoningEngine.reason(it) } }
                     DefectFormScreen(
                         viewModel = vm,
                         projectId = context.projectId,
@@ -254,9 +262,11 @@ fun DefectViewNavHost(container: AppContainer) {
                         originalPhotoPath = context.photoPath,
                         annotations = draftAnnotations,
                         reportedBy = DEFAULT_INSPECTOR_NAME,
+                        initialReasoning = initialReasoning,
                         onSaved = { defect ->
                             draftContext = null
                             draftAnnotations = emptyList()
+                            draftDetections = emptyList()
                             navController.navigate(Destination.DefectDetail.route(defect.id)) {
                                 popUpTo(Destination.Dashboard.route)
                             }

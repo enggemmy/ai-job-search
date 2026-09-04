@@ -13,6 +13,7 @@ import com.defectview.app.data.db.dao.InspectionDao
 import com.defectview.app.data.db.dao.LearningQueueDao
 import com.defectview.app.data.db.dao.ModelVersionDao
 import com.defectview.app.data.db.dao.ProjectDao
+import com.defectview.app.data.db.dao.ProjectKnowledgeDao
 import com.defectview.app.data.db.dao.UserSettingsDao
 import com.defectview.app.data.db.dao.VerifiedExampleDao
 import com.defectview.app.data.db.entity.AIAnalysisEntity
@@ -24,6 +25,7 @@ import com.defectview.app.data.db.entity.InspectionEntity
 import com.defectview.app.data.db.entity.LearningQueueEntity
 import com.defectview.app.data.db.entity.ModelVersionEntity
 import com.defectview.app.data.db.entity.ProjectEntity
+import com.defectview.app.data.db.entity.ProjectKnowledgeEntity
 import com.defectview.app.data.db.entity.UserSettingsEntity
 import com.defectview.app.data.db.entity.VerifiedExampleEntity
 
@@ -39,7 +41,8 @@ import com.defectview.app.data.db.entity.VerifiedExampleEntity
         VerifiedExampleEntity::class,
         LearningQueueEntity::class,
         ModelVersionEntity::class,
-        UserSettingsEntity::class
+        UserSettingsEntity::class,
+        ProjectKnowledgeEntity::class
     ],
     version = 1,
     exportSchema = true
@@ -56,6 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun learningQueueDao(): LearningQueueDao
     abstract fun modelVersionDao(): ModelVersionDao
     abstract fun userSettingsDao(): UserSettingsDao
+    abstract fun projectKnowledgeDao(): ProjectKnowledgeDao
 
     companion object {
         private const val DATABASE_NAME = "defect_view.db"

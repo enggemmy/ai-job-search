@@ -21,8 +21,13 @@ data class AnnotationDraft(
     val label: String = "",
     val colorArgb: Long,
     val points: List<Pair<Float, Float>>,
-    val strokeWidth: Float = 4f
+    val strokeWidth: Float = 4f,
+    val createdByAi: Boolean = false
 )
+
+/** Color used for annotations the app pre-drew from an AI suggestion, distinct from the
+ * inspector's own palette so it's visually obvious which shapes came from the vision engine. */
+const val AI_SUGGESTION_COLOR = 0xFF3A6EA5L
 
 val DEFAULT_ANNOTATION_COLORS = listOf(
     0xFFB3261EL, // critical red

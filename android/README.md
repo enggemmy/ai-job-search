@@ -34,8 +34,8 @@ automatically.
 |---|---|---|
 | 1 | Project scaffold, navigation, theme, Room schema, Projects, Inspections, CameraX capture, image storage | Implemented, not compiled (see limitations) |
 | 2 | Defect View annotation editor, defect records, status management, before/after | Implemented, not compiled - see gaps below |
-| 3 | Local vision engine, AI result interface, confidence handling | Done and tested: `ClassicalVisionEngine` (`domain/vision`), `AIAnalysis`/`AIDetection` persistence, "Analyze image" wired into New Inspection with spec-safe confidence language - see gaps below |
-| 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); templates/knowledge store not started |
+| 3 | Local vision engine, AI result interface, confidence handling | Done and tested: `ClassicalVisionEngine` (`domain/vision`), `AIAnalysis`/`AIDetection` persistence, "Analyze image" wired into New Inspection with spec-safe confidence language, AI detections now pre-populate the editor (see Phase 4) |
+| 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); AI detections seed editable annotations and prefill the Defect Form via the reasoning engine; `ProjectKnowledgeEntity`/DAO/Repository is a real, working data layer wired as an optional reasoning input - no management UI yet; inspection templates not started - see gaps below |
 | 5 | Verified learning, similarity search, Learning Center, model versioning | Domain logic done and tested (`domain/learning`, `ModelVersion`); Room tables + Learning Center UI not started |
 | 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done; PDF reports not started |
 | 7 | Tests, offline validation, production packaging | Domain unit tests real and passing; app-module instrumented tests not started; no APK has been produced or run |
@@ -62,15 +62,31 @@ an explicit "not yet implemented, here's what's planned" screen rather than a fa
 
 ### Phase 3 known gaps
 
-- **AI detections don't pre-populate the Defect View editor yet.** "Analyze image" on the New
-  Inspection screen runs the real classical-CV engine, shows each result with spec-safe language
-  ("AI suggestion" + "Possible defect detected"/"Review recommended"/"Insufficient confidence" -
-  never "confirmed"), and persists it as an `AIAnalysis`/`AIDetection` row once the inspection is
-  saved - but the detections aren't yet converted into editable `createdByAi = true` annotations
-  when the editor opens. The data model and the editor both already support AI-origin
-  annotations; only that hand-off is unwired.
 - The classical-CV engine is a coarse, explainable heuristic (locally outlying edge density /
   color variance), not a trained defect classifier - see the doc comment on `ClassicalVisionEngine`
   for exactly what it does and doesn't claim. Swapping in a real LiteRT/ONNX model later only
   requires a new `VisionEngine` implementation at the single `AppContainer.visionEngine` wire-up
   point.
+
+### Phase 4 known gaps
+
+- **AI hand-off is now wired end to end**: "Analyze image" → detections seeded as editable
+  `createdByAi = true` rectangle annotations in the Defect View editor (a distinct blue so
+  they're visually identifiable, but freely movable/resizable/deletable like any annotation) →
+  the highest-confidence detection is run through `InspectionReasoningEngine` to prefill the
+  Defect Form's title/description/category/trade/severity/recommendation, with an explicit "AI
+  suggestion (<confidence text>) — review and correct before saving" banner and
+  `severityIsAiSuggested = true` recorded on the saved defect.
+- **Project Knowledge has no management UI yet.** `ProjectKnowledgeEntity`, its DAO, and
+  `ProjectKnowledgeRepository` are real and wired as an optional input the reasoning engine can
+  use to override its default recommendation text (exactly the mechanism
+  `InspectionReasoningEngineTest`'s "project knowledge overrides the default recommendation"
+  test exercises) - but nothing in the app lets an inspector add a knowledge entry yet, and the
+  Defect Form's prefill call currently passes no project knowledge (`projectKnowledge = null`),
+  so it always falls back to the generic "verify against the approved project specification and
+  method statement" text even when project-specific entries exist. Wiring that load is a small,
+  well-scoped follow-up (`ProjectKnowledgeRepository.loadForReasoning(projectId)` already exists)
+  but needs the Defect Form's initial-state seeding to become effect-driven instead of
+  `remember`-once to do it without introducing a race.
+- **Inspection templates are not implemented.** Spec section 10 also asks for reusable
+  inspection templates (checklists per trade/area); nothing in this codebase covers that yet.
