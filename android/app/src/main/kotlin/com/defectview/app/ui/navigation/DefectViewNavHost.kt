@@ -16,11 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -31,8 +33,15 @@ import com.defectview.app.feature.camera.CameraCaptureScreen
 import com.defectview.app.feature.common.NotYetImplementedScreen
 import com.defectview.app.feature.dashboard.DashboardScreen
 import com.defectview.app.feature.dashboard.DashboardViewModel
+import com.defectview.app.feature.defects.DefectDetailScreen
+import com.defectview.app.feature.defects.DefectDetailViewModel
+import com.defectview.app.feature.defects.DefectFormScreen
+import com.defectview.app.feature.defects.DefectFormViewModel
 import com.defectview.app.feature.defects.DefectListScreen
 import com.defectview.app.feature.defects.DefectListViewModel
+import com.defectview.app.feature.editor.AnnotationDraft
+import com.defectview.app.feature.editor.AnnotationEditorViewModel
+import com.defectview.app.feature.editor.DefectViewEditorScreen
 import com.defectview.app.feature.inspections.InspectionListScreen
 import com.defectview.app.feature.inspections.InspectionViewModel
 import com.defectview.app.feature.inspections.NewInspectionScreen
@@ -50,10 +59,25 @@ private val bottomDestinations = listOf(
     Destination.Settings to (Icons.Filled.Settings to "Settings")
 )
 
+/** Which in-flight flow the camera screen's result should be routed back to. */
+private sealed class CaptureTarget {
+    data object NewInspectionPhoto : CaptureTarget()
+    data object DefectAfterPhoto : CaptureTarget()
+}
+
+/** The photo + context carried from "capture/save inspection" through the editor into the defect form. */
+private data class DefectDraftContext(val projectId: Long, val inspectionId: Long?, val location: String, val photoPath: String)
+
+private const val DEFAULT_INSPECTOR_NAME = "Site Inspector"
+
 @Composable
 fun DefectViewNavHost(container: AppContainer) {
     val navController = rememberNavController()
     var capturedPhotoPath by remember { mutableStateOf<String?>(null) }
+    var captureTarget by remember { mutableStateOf<CaptureTarget>(CaptureTarget.NewInspectionPhoto) }
+    var draftContext by remember { mutableStateOf<DefectDraftContext?>(null) }
+    var draftAnnotations by remember { mutableStateOf<List<AnnotationDraft>>(emptyList()) }
+    var pendingAfterPhotoPath by remember { mutableStateOf<String?>(null) }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination
@@ -105,7 +129,7 @@ fun DefectViewNavHost(container: AppContainer) {
 
             composable(
                 Destination.ProjectEdit.route,
-                arguments = listOf(navArgument("projectId") { defaultValue = -1L; type = androidx.navigation.NavType.LongType })
+                arguments = listOf(navArgument("projectId") { defaultValue = -1L; type = NavType.LongType })
             ) { entry ->
                 val projectId = entry.arguments?.getLong("projectId")?.takeIf { it >= 0 }
                 val vm: ProjectViewModel = viewModel(factory = ProjectViewModel.Factory(container.projectRepository))
@@ -119,7 +143,7 @@ fun DefectViewNavHost(container: AppContainer) {
 
             composable(
                 Destination.InspectionsForProject.route,
-                arguments = listOf(navArgument("projectId") { type = androidx.navigation.NavType.LongType })
+                arguments = listOf(navArgument("projectId") { type = NavType.LongType })
             ) { entry ->
                 val projectId = entry.arguments?.getLong("projectId") ?: return@composable
                 val vm: InspectionViewModel = viewModel(
@@ -128,32 +152,47 @@ fun DefectViewNavHost(container: AppContainer) {
                 InspectionListScreen(
                     viewModel = vm,
                     projectId = projectId,
-                    onInspectionClick = { /* Inspection detail / Defect View editor: Phase 2 */ },
+                    onInspectionClick = { /* Revisiting a past inspection to add more defects: not yet implemented (Phase 2 gap - see README). */ },
                     onNewInspection = { navController.navigate(Destination.NewInspection.route(projectId)) }
                 )
             }
 
             composable(
                 Destination.NewInspection.route,
-                arguments = listOf(navArgument("projectId") { defaultValue = -1L; type = androidx.navigation.NavType.LongType })
+                arguments = listOf(navArgument("projectId") { defaultValue = -1L; type = NavType.LongType })
             ) { entry ->
                 val projectId = entry.arguments?.getLong("projectId")?.takeIf { it >= 0 }
                 val vm: InspectionViewModel = viewModel(
                     factory = InspectionViewModel.Factory(container.inspectionRepository, container.projectRepository)
                 )
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                val scope = rememberCoroutineScope()
                 NewInspectionScreen(
                     viewModel = vm,
                     preselectedProjectId = projectId,
                     capturedPhotoPath = capturedPhotoPath,
-                    onCapturePhoto = { navController.navigate(Destination.CameraCapture.route) },
-                    onImportPhoto = { /* System photo picker wiring: Phase 2 */ },
+                    onCapturePhoto = {
+                        captureTarget = CaptureTarget.NewInspectionPhoto
+                        navController.navigate(Destination.CameraCapture.route)
+                    },
+                    onImportPhoto = { /* System photo picker wiring: Phase 2 follow-up */ },
                     onSaved = { inspectionId ->
-                        capturedPhotoPath?.let { path ->
-                            scope.launch { container.attachmentRepository.attachToInspection(inspectionId, path) }
+                        val photo = capturedPhotoPath
+                        if (photo != null) {
+                            scope.launch { container.attachmentRepository.attachToInspection(inspectionId, photo) }
+                            draftContext = DefectDraftContext(
+                                projectId = projectId ?: 0,
+                                inspectionId = inspectionId,
+                                location = "",
+                                photoPath = photo
+                            )
+                            capturedPhotoPath = null
+                            navController.navigate(Destination.DefectEditor.route) {
+                                popUpTo(Destination.InspectionsForProject.route(projectId ?: 0))
+                            }
+                        } else {
+                            capturedPhotoPath = null
+                            navController.popBackStack()
                         }
-                        capturedPhotoPath = null
-                        navController.popBackStack()
                     }
                 )
             }
@@ -162,16 +201,93 @@ fun DefectViewNavHost(container: AppContainer) {
                 CameraCaptureScreen(
                     imageStorageManager = container.imageStorageManager,
                     onCaptured = { path ->
-                        capturedPhotoPath = path
+                        when (captureTarget) {
+                            CaptureTarget.NewInspectionPhoto -> capturedPhotoPath = path
+                            CaptureTarget.DefectAfterPhoto -> pendingAfterPhotoPath = path
+                        }
                         navController.popBackStack()
                     },
                     onCancel = { navController.popBackStack() }
                 )
             }
 
+            composable(Destination.DefectEditor.route) {
+                val context = draftContext
+                if (context == null) {
+                    navController.popBackStack()
+                } else {
+                    val vm: AnnotationEditorViewModel = viewModel(factory = AnnotationEditorViewModel.Factory(draftAnnotations))
+                    DefectViewEditorScreen(
+                        imagePath = context.photoPath,
+                        viewModel = vm,
+                        onDone = {
+                            draftAnnotations = vm.annotationsForSave()
+                            navController.navigate(Destination.DefectForm.route)
+                        },
+                        onCancel = {
+                            draftContext = null
+                            draftAnnotations = emptyList()
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
+
+            composable(Destination.DefectForm.route) {
+                val context = draftContext
+                if (context == null) {
+                    navController.popBackStack()
+                } else {
+                    val vm: DefectFormViewModel = viewModel(
+                        factory = DefectFormViewModel.Factory(
+                            container.defectRepository,
+                            container.annotationRepository,
+                            container.attachmentRepository,
+                            container.imageStorageManager
+                        )
+                    )
+                    DefectFormScreen(
+                        viewModel = vm,
+                        projectId = context.projectId,
+                        inspectionId = context.inspectionId,
+                        location = context.location,
+                        originalPhotoPath = context.photoPath,
+                        annotations = draftAnnotations,
+                        reportedBy = DEFAULT_INSPECTOR_NAME,
+                        onSaved = { defect ->
+                            draftContext = null
+                            draftAnnotations = emptyList()
+                            navController.navigate(Destination.DefectDetail.route(defect.id)) {
+                                popUpTo(Destination.Dashboard.route)
+                            }
+                        },
+                        onCancel = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            composable(
+                Destination.DefectDetail.route,
+                arguments = listOf(navArgument("defectId") { type = NavType.LongType })
+            ) { entry ->
+                val defectId = entry.arguments?.getLong("defectId") ?: return@composable
+                val vm: DefectDetailViewModel = viewModel(
+                    factory = DefectDetailViewModel.Factory(defectId, container.defectRepository)
+                )
+                DefectDetailScreen(
+                    viewModel = vm,
+                    onCaptureAfterPhoto = {
+                        captureTarget = CaptureTarget.DefectAfterPhoto
+                        navController.navigate(Destination.CameraCapture.route)
+                    },
+                    pendingAfterPhotoPath = pendingAfterPhotoPath,
+                    onConsumePendingAfterPhoto = { pendingAfterPhotoPath = null }
+                )
+            }
+
             composable(Destination.Defects.route) {
                 val vm: DefectListViewModel = viewModel(factory = DefectListViewModel.Factory(container.defectRepository))
-                DefectListScreen(vm, onDefectClick = { /* Defect detail / Defect View editor: Phase 2 */ })
+                DefectListScreen(vm, onDefectClick = { defect -> navController.navigate(Destination.DefectDetail.route(defect.id)) })
             }
 
             composable(Destination.LearningCenter.route) {

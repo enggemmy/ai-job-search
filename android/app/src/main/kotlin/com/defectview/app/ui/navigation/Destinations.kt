@@ -14,10 +14,13 @@ sealed class Destination(val route: String) {
         fun route(projectId: Long) = "inspections/new?projectId=$projectId"
     }
     data object CameraCapture : Destination("camera")
+    data object DefectEditor : Destination("defect_editor")
+    data object DefectForm : Destination("defect_form")
+    data object DefectDetail : Destination("defect_detail/{defectId}") {
+        fun route(defectId: Long) = "defect_detail/$defectId"
+    }
     data object Defects : Destination("defects")
     data object LearningCenter : Destination("learning_center")
     data object Reports : Destination("reports")
     data object Settings : Destination("settings")
 }
-
-data class BottomNavItem(val destination: Destination, val labelRes: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector)

@@ -1,8 +1,10 @@
 package com.defectview.app.data.storage
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,6 +38,16 @@ class ImageStorageManager(private val context: Context) {
         sourceFile.copyTo(destination, overwrite = true)
         if (sourceFile.parentFile == cameraTempDir) {
             sourceFile.delete()
+        }
+        return destination.absolutePath
+    }
+
+    /** Encodes an in-memory (e.g. freshly annotated) bitmap straight to permanent storage. */
+    fun saveBitmap(bitmap: Bitmap, prefix: String = "annotated"): String {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+        val destination = File(photosDir, "${prefix}_$timestamp.jpg")
+        FileOutputStream(destination).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
         }
         return destination.absolutePath
     }

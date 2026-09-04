@@ -2,6 +2,7 @@ package com.defectview.app.di
 
 import android.content.Context
 import com.defectview.app.data.db.AppDatabase
+import com.defectview.app.data.repository.AnnotationRepository
 import com.defectview.app.data.repository.AttachmentRepository
 import com.defectview.app.data.repository.DefectRepository
 import com.defectview.app.data.repository.InspectionRepository
@@ -22,4 +23,5 @@ class AppContainer(context: Context) {
     val inspectionRepository = InspectionRepository(database.inspectionDao())
     val defectRepository = DefectRepository(database.defectDao())
     val attachmentRepository = AttachmentRepository(database.attachmentDao())
+    val annotationRepository = AnnotationRepository(database.annotationDao())
 }
