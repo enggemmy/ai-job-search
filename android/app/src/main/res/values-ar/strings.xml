@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ديفكت فيو</string>
+
+    <string name="nav_dashboard">لوحة التحكم</string>
+    <string name="nav_projects">المشاريع</string>
+    <string name="nav_inspections">التفتيشات</string>
+    <string name="nav_defects">الملاحظات</string>
+    <string name="nav_learning_center">مركز التعلم</string>
+    <string name="nav_reports">التقارير</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <string name="projects_title">المشاريع</string>
+    <string name="projects_empty">لا توجد مشاريع بعد. أنشئ أول مشروع للبدء بالتفتيش.</string>
+    <string name="project_new">مشروع جديد</string>
+    <string name="project_edit">تعديل المشروع</string>
+    <string name="project_number">رقم المشروع</string>
+    <string name="project_name">اسم المشروع</string>
+    <string name="project_client">المالك</string>
+    <string name="project_consultant">الاستشاري</string>
+    <string name="project_contractor">المقاول</string>
+    <string name="project_location">الموقع</string>
+    <string name="project_description">الوصف</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+
+    <string name="inspections_title">التفتيشات</string>
+    <string name="inspections_empty">لا توجد تفتيشات لهذا المشروع بعد.</string>
+    <string name="inspection_new">تفتيش جديد</string>
+    <string name="inspection_select_project">المشروع</string>
+    <string name="inspection_location">الموقع</string>
+    <string name="inspection_area">الغرفة / المنطقة</string>
+    <string name="inspection_trade">التخصص</string>
+    <string name="inspection_notes">ملاحظات</string>
+    <string name="inspection_capture_photo">التقاط صورة</string>
+    <string name="inspection_import_photo">استيراد صورة</string>
+    <string name="inspection_analyze">تحليل الصورة</string>
+
+    <string name="camera_permission_required">إذن الكاميرا مطلوب لالتقاط صور التفتيش.</string>
+    <string name="camera_grant_permission">منح الإذن</string>
+    <string name="camera_capture">التقاط</string>
+
+    <string name="ai_suggestion_label">اقتراح الذكاء الاصطناعي</string>
+    <string name="ai_confidence_high">احتمال وجود ملاحظة</string>
+    <string name="ai_confidence_medium">يُنصح بالمراجعة</string>
+    <string name="ai_confidence_low">دقة غير كافية</string>
+    <string name="ai_severity_disclaimer">مقترح — يتطلب تأكيد المفتش</string>
+
+    <string name="error_generic">حدث خطأ ما. يرجى المحاولة مرة أخرى.</string>
+    <string name="loading">جارٍ التحميل…</string>
+    <string name="confirm_delete_title">هل تريد حذف هذا العنصر؟</string>
+    <string name="confirm_delete_message">لا يمكن التراجع عن هذا الإجراء.</string>
+</resources>
