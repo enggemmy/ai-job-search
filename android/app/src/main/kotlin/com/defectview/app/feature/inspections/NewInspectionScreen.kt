@@ -146,6 +146,17 @@ fun NewInspectionScreen(
                 OutlinedButton(onClick = onImportPhoto, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.inspection_import_photo))
                 }
+                if (capturedPhotoPath != null) {
+                    val analysisState by viewModel.analysisState.collectAsStateWithLifecycle()
+                    OutlinedButton(
+                        onClick = { viewModel.analyzePhoto(capturedPhotoPath) },
+                        enabled = analysisState !is InspectionViewModel.AnalysisState.Analyzing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.inspection_analyze))
+                    }
+                    AnalysisResults(analysisState)
+                }
             }
 
             if (saveState is InspectionViewModel.SaveState.Error) {
@@ -154,11 +165,36 @@ fun NewInspectionScreen(
 
             Button(
                 onClick = {
-                    viewModel.save(selectedProject?.id, location, area, trade, notes, inspectorName)
+                    viewModel.save(selectedProject?.id, location, area, trade, notes, inspectorName, analyzedPhotoPath = capturedPhotoPath)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.action_save))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalysisResults(state: InspectionViewModel.AnalysisState) {
+    when (state) {
+        is InspectionViewModel.AnalysisState.Idle -> Unit
+        is InspectionViewModel.AnalysisState.Analyzing -> Text(stringResource(R.string.loading))
+        is InspectionViewModel.AnalysisState.Done -> {
+            if (state.detections.isEmpty()) {
+                Text("No irregular areas found by the local vision engine.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.detections.forEach { detection ->
+                        val confidenceText = com.defectview.domain.confidence.ConfidenceClassifier.displayText(detection.confidenceScore)
+                        androidx.compose.material3.Card {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("${stringResource(R.string.ai_suggestion_label)}: $confidenceText", style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                                Text(detection.evidence, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

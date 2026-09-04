@@ -147,7 +147,7 @@ fun DefectViewNavHost(container: AppContainer) {
             ) { entry ->
                 val projectId = entry.arguments?.getLong("projectId") ?: return@composable
                 val vm: InspectionViewModel = viewModel(
-                    factory = InspectionViewModel.Factory(container.inspectionRepository, container.projectRepository)
+                    factory = InspectionViewModel.Factory(container.inspectionRepository, container.projectRepository, container.visionEngine, container.aiAnalysisRepository)
                 )
                 InspectionListScreen(
                     viewModel = vm,
@@ -163,7 +163,7 @@ fun DefectViewNavHost(container: AppContainer) {
             ) { entry ->
                 val projectId = entry.arguments?.getLong("projectId")?.takeIf { it >= 0 }
                 val vm: InspectionViewModel = viewModel(
-                    factory = InspectionViewModel.Factory(container.inspectionRepository, container.projectRepository)
+                    factory = InspectionViewModel.Factory(container.inspectionRepository, container.projectRepository, container.visionEngine, container.aiAnalysisRepository)
                 )
                 val scope = rememberCoroutineScope()
                 NewInspectionScreen(

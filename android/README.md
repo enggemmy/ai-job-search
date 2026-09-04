@@ -8,10 +8,12 @@ what's actually built versus what's still ahead, and how to build it.
 
 - `domain/` — pure Kotlin/JVM module. Models, the defect ID generator, the defect taxonomy, the
   confidence classifier, the rule-based reasoning engine, the learning-queue state machine,
-  cosine-similarity search, and the annotation-editor geometry (hit-testing, move, resize, path
-  length). No Android dependency, so it builds and its tests run anywhere with a JDK — this is
-  the part of the app that has been genuinely compiled and tested in CI-less environments (see
-  NETWORK_LIMITATIONS.md).
+  cosine-similarity search, the annotation-editor geometry (hit-testing, move, resize, path
+  length), and `ClassicalVisionEngine` - a real, deterministic classical-CV defect-signal
+  detector (edge-density and color-variance outlier tiles), not a trained model and never
+  presented as one. No Android dependency, so it builds and its tests run anywhere with a JDK —
+  this is the part of the app that has been genuinely compiled and tested in CI-less
+  environments (see NETWORK_LIMITATIONS.md).
 - `app/` — the Android application: Compose UI, Room database, CameraX capture, repositories,
   navigation. Depends on `domain`.
 
@@ -32,7 +34,7 @@ automatically.
 |---|---|---|
 | 1 | Project scaffold, navigation, theme, Room schema, Projects, Inspections, CameraX capture, image storage | Implemented, not compiled (see limitations) |
 | 2 | Defect View annotation editor, defect records, status management, before/after | Implemented, not compiled - see gaps below |
-| 3 | Local vision engine, AI result interface, confidence handling | Interface + models done (`domain/vision`); classical-CV implementation not started |
+| 3 | Local vision engine, AI result interface, confidence handling | Done and tested: `ClassicalVisionEngine` (`domain/vision`), `AIAnalysis`/`AIDetection` persistence, "Analyze image" wired into New Inspection with spec-safe confidence language - see gaps below |
 | 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); templates/knowledge store not started |
 | 5 | Verified learning, similarity search, Learning Center, model versioning | Domain logic done and tested (`domain/learning`, `ModelVersion`); Room tables + Learning Center UI not started |
 | 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done; PDF reports not started |
@@ -57,3 +59,18 @@ an explicit "not yet implemented, here's what's planned" screen rather than a fa
   (`DefectViewEditorScreen`) share drawing logic but are two separate implementations (one
   `android.graphics.Canvas`-based for the saved file, one Compose `DrawScope`-based for the live
   preview) - they were written to match, but nothing has verified they render identically.
+
+### Phase 3 known gaps
+
+- **AI detections don't pre-populate the Defect View editor yet.** "Analyze image" on the New
+  Inspection screen runs the real classical-CV engine, shows each result with spec-safe language
+  ("AI suggestion" + "Possible defect detected"/"Review recommended"/"Insufficient confidence" -
+  never "confirmed"), and persists it as an `AIAnalysis`/`AIDetection` row once the inspection is
+  saved - but the detections aren't yet converted into editable `createdByAi = true` annotations
+  when the editor opens. The data model and the editor both already support AI-origin
+  annotations; only that hand-off is unwired.
+- The classical-CV engine is a coarse, explainable heuristic (locally outlying edge density /
+  color variance), not a trained defect classifier - see the doc comment on `ClassicalVisionEngine`
+  for exactly what it does and doesn't claim. Swapping in a real LiteRT/ONNX model later only
+  requires a new `VisionEngine` implementation at the single `AppContainer.visionEngine` wire-up
+  point.
