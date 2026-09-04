@@ -9,11 +9,12 @@ what's actually built versus what's still ahead, and how to build it.
 - `domain/` — pure Kotlin/JVM module. Models, the defect ID generator, the defect taxonomy, the
   confidence classifier, the rule-based reasoning engine, the learning-queue state machine,
   cosine-similarity search, the annotation-editor geometry (hit-testing, move, resize, path
-  length), and `ClassicalVisionEngine` - a real, deterministic classical-CV defect-signal
-  detector (edge-density and color-variance outlier tiles), not a trained model and never
-  presented as one. No Android dependency, so it builds and its tests run anywhere with a JDK —
-  this is the part of the app that has been genuinely compiled and tested in CI-less
-  environments (see NETWORK_LIMITATIONS.md).
+  length), `ClassicalVisionEngine` - a real, deterministic classical-CV defect-signal detector
+  (edge-density and color-variance outlier tiles), not a trained model and never presented as
+  one - and `SimpleFeatureExtractor`, a hand-crafted 8-dimensional image feature vector (not a
+  learned embedding) used for the verified-example similarity search. No Android dependency, so
+  it builds and its tests run anywhere with a JDK — this is the part of the app that has been
+  genuinely compiled and tested in CI-less environments (see NETWORK_LIMITATIONS.md).
 - `app/` — the Android application: Compose UI, Room database, CameraX capture, repositories,
   navigation. Depends on `domain`.
 
@@ -36,7 +37,7 @@ automatically.
 | 2 | Defect View annotation editor, defect records, status management, before/after | Implemented, not compiled - see gaps below |
 | 3 | Local vision engine, AI result interface, confidence handling | Done and tested: `ClassicalVisionEngine` (`domain/vision`), `AIAnalysis`/`AIDetection` persistence, "Analyze image" wired into New Inspection with spec-safe confidence language, AI detections now pre-populate the editor (see Phase 4) |
 | 4 | Reasoning engine, inspection templates, project knowledge | Reasoning engine done and tested (`domain/reasoning`); AI detections seed editable annotations and prefill the Defect Form via the reasoning engine; `ProjectKnowledgeEntity`/DAO/Repository is a real, working data layer wired as an optional reasoning input - no management UI yet; inspection templates not started - see gaps below |
-| 5 | Verified learning, similarity search, Learning Center, model versioning | Domain logic done and tested (`domain/learning`, `ModelVersion`); Room tables + Learning Center UI not started |
+| 5 | Verified learning, similarity search, Learning Center, model versioning | Done and tested at the domain level (`domain/learning`, `SimpleFeatureExtractor`); app-level wiring complete: saving a defect from an AI suggestion records a `VerifiedExampleEntity` (APPROVED/CORRECTED) and enqueues it, the Learning Center screen shows stats/queue/version history and can run a local learning update and roll back - see gaps below |
 | 6 | PDF reports, dashboard, search/filter/export | Dashboard stats screen done; PDF reports not started |
 | 7 | Tests, offline validation, production packaging | Domain unit tests real and passing; app-module instrumented tests not started; no APK has been produced or run |
 
@@ -90,3 +91,22 @@ an explicit "not yet implemented, here's what's planned" screen rather than a fa
   `remember`-once to do it without introducing a race.
 - **Inspection templates are not implemented.** Spec section 10 also asks for reusable
   inspection templates (checklists per trade/area); nothing in this codebase covers that yet.
+
+### Phase 5 known gaps
+
+- **"Reject" isn't a distinct recorded action.** Spec section 8 lists approve/correct/reject as
+  three inspector actions on an AI suggestion. Approve and correct both happen naturally (save a
+  defect with the AI trade kept vs. changed); reject has no explicit UI path - an inspector who
+  disagrees with a suggestion just doesn't create a defect from it, so no record of "this
+  specific AI suggestion was looked at and dismissed" exists anywhere (not in `AIAnalysis`,
+  which is written unconditionally when "Analyze image" runs, and not in `VerifiedExample`,
+  which is only ever written on save).
+- **Similarity search isn't surfaced anywhere yet.** `SimilaritySearch.topMatches` (tested) and
+  `VerifiedExampleRepository.allForSimilaritySearch()` both exist, but nothing in the UI calls
+  them - there's no "cases like this one" panel during defect creation.
+- **No manual add / export / import for the verified dataset**, and no per-example "AI accuracy
+  feedback" view - the Learning Center shows aggregate approved/corrected counts, not a
+  browsable per-example history.
+- The approve-vs-corrected judgment in `DefectFormViewModel.recordVerifiedExample` is a rough
+  proxy (whether the saved trade differs from the AI's) - it doesn't consider whether title,
+  category, or severity were also changed.

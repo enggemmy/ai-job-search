@@ -7,8 +7,11 @@ import com.defectview.app.data.repository.AnnotationRepository
 import com.defectview.app.data.repository.AttachmentRepository
 import com.defectview.app.data.repository.DefectRepository
 import com.defectview.app.data.repository.InspectionRepository
+import com.defectview.app.data.repository.LearningQueueRepository
+import com.defectview.app.data.repository.ModelVersionRepository
 import com.defectview.app.data.repository.ProjectKnowledgeRepository
 import com.defectview.app.data.repository.ProjectRepository
+import com.defectview.app.data.repository.VerifiedExampleRepository
 import com.defectview.app.data.storage.ImageStorageManager
 import com.defectview.domain.reasoning.InspectionReasoningEngine
 import com.defectview.domain.vision.ClassicalVisionEngine
@@ -31,6 +34,9 @@ class AppContainer(context: Context) {
     val annotationRepository = AnnotationRepository(database.annotationDao())
     val aiAnalysisRepository = AIAnalysisRepository(database.aiAnalysisDao())
     val projectKnowledgeRepository = ProjectKnowledgeRepository(database.projectKnowledgeDao())
+    val verifiedExampleRepository = VerifiedExampleRepository(database.verifiedExampleDao(), database.learningQueueDao())
+    val learningQueueRepository = LearningQueueRepository(database.learningQueueDao())
+    val modelVersionRepository = ModelVersionRepository(database.modelVersionDao(), database.learningQueueDao())
 
     /** Swappable at this single point when a trained LiteRT/ONNX model becomes available - the
      * rest of the app depends only on the [VisionEngine] interface (spec section 3/4A). */

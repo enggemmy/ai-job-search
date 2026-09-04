@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.defectview.app.feature.editor.AnnotationDraft
 import com.defectview.domain.model.Defect
 import com.defectview.domain.model.DefectCategory
+import com.defectview.domain.model.DefectDetection
 import com.defectview.domain.model.DefectPriority
 import com.defectview.domain.model.DefectSeverity
 import com.defectview.domain.model.Trade
@@ -80,6 +81,7 @@ fun DefectFormScreen(
     annotations: List<AnnotationDraft>,
     reportedBy: String,
     initialReasoning: ReasoningResult? = null,
+    sourceDetection: DefectDetection? = null,
     onSaved: (Defect) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -155,7 +157,8 @@ fun DefectFormScreen(
                         responsibleParty = responsibleParty,
                         priority = priority,
                         reportedBy = reportedBy,
-                        inspectorComments = inspectorComments
+                        inspectorComments = inspectorComments,
+                        sourceDetection = sourceDetection
                     )
                 },
                 modifier = Modifier.fillMaxWidth()

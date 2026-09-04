@@ -44,6 +44,8 @@ import com.defectview.app.feature.editor.AnnotationEditorViewModel
 import com.defectview.app.feature.editor.DefectViewEditorScreen
 import com.defectview.app.feature.editor.toSeedAnnotationDrafts
 import com.defectview.app.feature.inspections.InspectionListScreen
+import com.defectview.app.feature.learning.LearningCenterScreen
+import com.defectview.app.feature.learning.LearningCenterViewModel
 import com.defectview.app.feature.inspections.InspectionViewModel
 import com.defectview.app.feature.inspections.NewInspectionScreen
 import com.defectview.app.feature.projects.ProjectEditScreen
@@ -249,7 +251,9 @@ fun DefectViewNavHost(container: AppContainer) {
                             container.defectRepository,
                             container.annotationRepository,
                             container.attachmentRepository,
-                            container.imageStorageManager
+                            container.imageStorageManager,
+                            container.verifiedExampleRepository,
+                            container.visionEngine.info.modelVersion
                         )
                     )
                     val topDetection = draftDetections.maxByOrNull { it.confidenceScore }
@@ -263,6 +267,7 @@ fun DefectViewNavHost(container: AppContainer) {
                         annotations = draftAnnotations,
                         reportedBy = DEFAULT_INSPECTOR_NAME,
                         initialReasoning = initialReasoning,
+                        sourceDetection = topDetection,
                         onSaved = { defect ->
                             draftContext = null
                             draftAnnotations = emptyList()
@@ -301,10 +306,14 @@ fun DefectViewNavHost(container: AppContainer) {
             }
 
             composable(Destination.LearningCenter.route) {
-                NotYetImplementedScreen(
-                    title = "Learning Center",
-                    phaseNote = "The verified-example learning workflow (approve/correct/reject, similarity search, model versioning) is implemented in the domain layer and lands in the app UI in Phase 5."
+                val vm: LearningCenterViewModel = viewModel(
+                    factory = LearningCenterViewModel.Factory(
+                        container.verifiedExampleRepository,
+                        container.learningQueueRepository,
+                        container.modelVersionRepository
+                    )
                 )
+                LearningCenterScreen(vm)
             }
 
             composable(Destination.Reports.route) {
