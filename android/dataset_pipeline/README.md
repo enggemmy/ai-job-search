@@ -7,7 +7,7 @@ logic) is standard, mature tooling in Python, and keeping it separate from `andr
 `android/domain` means it never touches the Android build.
 
 **This has been run, for real, in this sandbox** - `python3 -m unittest discover -s tests -t .`
-passes 67 tests, including end-to-end ingestion tests against synthetic (programmatically
+passes 92 tests, including end-to-end ingestion tests against synthetic (programmatically
 generated) images. That is a materially different, stronger kind of verification than the rest
 of this repo's `android/app` module, which has never compiled (see `android/NETWORK_LIMITATIONS.md`).
 
@@ -45,17 +45,28 @@ to actually pull each dataset.
   project+location, inspection sequence, or near-duplicate cluster - never gets split across sets).
 - `ingest.py` - orchestrates the above into one call; gates writes so nothing ever lands in
   `datasets/production/` unless its manifest's tier is genuinely `TIER_A_PRODUCTION`.
+- `dataset_version.py` - `DatasetVersion` (spec section 18): append-only, immutable snapshots
+  (`DEFECT_VIEW_DATASET_v0.1`, `v0.2`, ...) recording datasets included, image/annotation counts,
+  class distribution, and eval results. Recording a version whose label already exists raises -
+  never a silent overwrite. Distinct from the Android app's own `ModelVersionEntity`, which
+  versions the on-device similarity-search snapshot one layer downstream - see the module
+  docstring for exactly how the two relate.
+- `quality_score.py` - `compute_quality_score()` (spec section 19): a weighted composite (0-100)
+  from five real, independently-computed sub-scores - image usability, annotation validity,
+  class-distribution diversity (Shannon entropy, not just the imbalance warnings in
+  `quality_control.py`), license-tier confidence, and label-mapping reliability. Every sub-score
+  is shown, not just the composite.
 - `cli.py` - `registry`, `check-images DIR`, `class-balance LABELS_FILE`.
 - `registry/verified_datasets.py` - the 5 real, session-researched dataset manifests (MBDD2025,
   ConViD, CODEBRIM, BD3, CUBIT-InSeg) with their actual verified (or honestly unverified) license
   status.
-- `tests/` - 67 unit/integration tests, all passing (`python3 -m unittest discover -s tests -t .`).
+- `tests/` - 92 unit/integration tests, all passing (`python3 -m unittest discover -s tests -t .`).
 
 ## Running it
 
 ```
 pip install -r requirements.txt
-python3 -m unittest discover -s tests -t .   # 67 tests
+python3 -m unittest discover -s tests -t .   # 92 tests
 python3 cli.py registry                       # dataset manifests + license tiers
 python3 cli.py check-images /path/to/photos    # QC over real images once you have some
 ```
@@ -71,8 +82,6 @@ python3 cli.py check-images /path/to/photos    # QC over real images once you ha
   needs a GPU, a training framework (PyTorch/TensorFlow), and real labeled data - none of which
   exist in this sandbox. `manifest_schema.py`'s `AnnotationRecord` and `dataset_split.py`'s
   grouped splits are exactly what a training script would consume once one exists.
-- **Dataset versioning (spec section 18)** and the **dataset quality score (spec section 19)**
-  are not implemented - both are real, buildable features, just not built in this pass.
 - **Project data isolation (spec section 17)** is partially covered by `dataset_split.py`'s
   grouping (a project's images can be grouped so they never leak across train/test) but there's
   no enforcement yet that a project's inspection images stay out of the *global* training set
