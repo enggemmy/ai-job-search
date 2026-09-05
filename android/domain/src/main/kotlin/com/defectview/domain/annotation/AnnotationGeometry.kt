@@ -103,6 +103,28 @@ object AnnotationGeometry {
         }
     }
 
+    /**
+     * Which corner handle (if any) of a two-point shape's bounding box is within [tolerance] of
+     * ([x], [y]). Returns null for shapes that aren't exactly two points (only CIRCLE/RECTANGLE
+     * are resizable this way) or when no corner is close enough, so callers can fall back to a
+     * plain move.
+     */
+    fun cornerAt(points: List<Pair<Float, Float>>, x: Float, y: Float, tolerance: Float = 0.035f): Corner? {
+        if (points.size != 2) return null
+        val box = boundingBox(points) ?: return null
+        val corners = mapOf(
+            Corner.TOP_LEFT to (box.left to box.top),
+            Corner.TOP_RIGHT to (box.right to box.top),
+            Corner.BOTTOM_LEFT to (box.left to box.bottom),
+            Corner.BOTTOM_RIGHT to (box.right to box.bottom)
+        )
+        return corners.entries
+            .map { (corner, point) -> corner to hypot((x - point.first).toDouble(), (y - point.second).toDouble()) }
+            .minByOrNull { (_, distance) -> distance }
+            ?.takeIf { (_, distance) -> distance <= tolerance }
+            ?.first
+    }
+
     /** Clamps every point into the 0f..1f normalized image space, e.g. after a drag that overshoots the photo bounds. */
     fun clampToUnitSquare(points: List<Pair<Float, Float>>): List<Pair<Float, Float>> =
         points.map { (x, y) -> x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f) }

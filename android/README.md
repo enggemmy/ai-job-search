@@ -86,10 +86,12 @@ gaps" section above says exactly what won't work yet when you get there.
 
 ### Phase 2 known gaps
 
-- **Resize handles aren't wired to a gesture.** `AnnotationGeometry.resizeCorner` and
-  `AnnotationEditorViewModel.resizeSelected` are implemented and tested, but the editor's
-  pointer-input code doesn't yet detect a drag starting on a shape's corner handle - today you
-  can move and delete a selected circle/rectangle, but not resize it by dragging a corner.
+- **Resize-by-corner-drag is now wired.** A new `AnnotationGeometry.cornerAt` (tested) hit-tests
+  the four corners of a selected CIRCLE/RECTANGLE's bounding box; `DefectViewEditorScreen`'s
+  SELECT-tool drag gesture checks it on `onDragStart` and, if the drag started near a corner,
+  routes the whole drag to `AnnotationEditorViewModel.resizeSelected` instead of `moveSelected` -
+  falling back to move when it isn't. Selected circles/rectangles now also draw visible white/
+  colored corner handles so there's an on-screen affordance for where to grab.
 - **Revisiting a previously saved inspection to add another defect isn't wired.**
   `InspectionListScreen.onInspectionClick` is a documented no-op. The only working path to the
   Defect View editor right now is capture-photo → save a *new* inspection → editor → form.

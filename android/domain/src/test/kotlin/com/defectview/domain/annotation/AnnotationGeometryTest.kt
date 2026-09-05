@@ -84,6 +84,25 @@ class AnnotationGeometryTest {
     }
 
     @Test
+    fun `cornerAt identifies the nearest corner within tolerance`() {
+        val rect = listOf(0.2f to 0.2f, 0.6f to 0.6f)
+        assertEquals(Corner.TOP_LEFT, AnnotationGeometry.cornerAt(rect, 0.21f, 0.19f))
+        assertEquals(Corner.BOTTOM_RIGHT, AnnotationGeometry.cornerAt(rect, 0.61f, 0.62f))
+    }
+
+    @Test
+    fun `cornerAt returns null when no corner is close enough`() {
+        val rect = listOf(0.2f to 0.2f, 0.6f to 0.6f)
+        assertNull(AnnotationGeometry.cornerAt(rect, 0.4f, 0.4f))
+    }
+
+    @Test
+    fun `cornerAt returns null for shapes that are not exactly two points`() {
+        val freehand = listOf(0.1f to 0.1f, 0.2f to 0.2f, 0.3f to 0.1f)
+        assertNull(AnnotationGeometry.cornerAt(freehand, 0.1f, 0.1f))
+    }
+
+    @Test
     fun `clampToUnitSquare pulls out-of-range points back into 0 to 1`() {
         val result = AnnotationGeometry.clampToUnitSquare(listOf(-0.2f to 1.5f, 0.5f to 0.5f))
         assertEquals(listOf(0f to 1f, 0.5f to 0.5f), result)

@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.defectview.domain.annotation.AnnotationGeometry
+import com.defectview.domain.annotation.Corner
 import com.defectview.domain.model.AnnotationType
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -101,6 +102,7 @@ fun DefectViewEditorScreen(
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var inProgressPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var dragStartSnapshot by remember { mutableStateOf<List<AnnotationDraft>?>(null) }
+    var activeResizeCorner by remember { mutableStateOf<Corner?>(null) }
     var pendingTextAnchor by remember { mutableStateOf<Pair<Float, Float>?>(null) }
     val textMeasurer = rememberTextMeasurer()
 
@@ -156,6 +158,8 @@ fun DefectViewEditorScreen(
                                 when (ui.selectedTool) {
                                     EditorTool.SELECT -> {
                                         dragStartSnapshot = viewModel.currentSnapshot()
+                                        val selected = ui.annotations.find { it.localKey == ui.selectedAnnotationKey }
+                                        activeResizeCorner = selected?.let { AnnotationGeometry.cornerAt(it.points, nx, ny) }
                                     }
                                     EditorTool.CIRCLE, EditorTool.RECTANGLE, EditorTool.ARROW ->
                                         inProgressPoints = listOf(nx to ny, nx to ny)
@@ -167,8 +171,14 @@ fun DefectViewEditorScreen(
                                 change.consume()
                                 when (ui.selectedTool) {
                                     EditorTool.SELECT -> {
-                                        val (dnx, dny) = mapping.normalizedDelta(dragAmount.x, dragAmount.y)
-                                        viewModel.moveSelected(dnx, dny)
+                                        val corner = activeResizeCorner
+                                        if (corner != null) {
+                                            val (nx, ny) = mapping.toNormalized(change.position)
+                                            viewModel.resizeSelected(corner, nx, ny)
+                                        } else {
+                                            val (dnx, dny) = mapping.normalizedDelta(dragAmount.x, dragAmount.y)
+                                            viewModel.moveSelected(dnx, dny)
+                                        }
                                     }
                                     EditorTool.CIRCLE, EditorTool.RECTANGLE, EditorTool.ARROW -> {
                                         val (nx, ny) = mapping.toNormalized(change.position)
@@ -187,6 +197,7 @@ fun DefectViewEditorScreen(
                                     EditorTool.SELECT -> {
                                         dragStartSnapshot?.let { viewModel.commitTransform(it) }
                                         dragStartSnapshot = null
+                                        activeResizeCorner = null
                                     }
                                     EditorTool.CIRCLE, EditorTool.RECTANGLE, EditorTool.ARROW -> {
                                         if (inProgressPoints.size == 2) {
@@ -383,6 +394,16 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAnnotation(
                 )
                 drawText(layout, topLeft = bgTopLeft, color = color)
             }
+        }
+    }
+
+    if (isSelected && (annotation.type == AnnotationType.RECTANGLE || annotation.type == AnnotationType.CIRCLE)) {
+        val box = AnnotationGeometry.boundingBox(annotation.points) ?: return
+        val handleRadius = 10f
+        listOf(box.left to box.top, box.right to box.top, box.left to box.bottom, box.right to box.bottom).forEach { corner ->
+            val point = mapping.toScreen(corner)
+            drawCircle(Color.White, radius = handleRadius, center = point)
+            drawCircle(color, radius = handleRadius, center = point, style = Stroke(width = 3f))
         }
     }
 }
