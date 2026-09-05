@@ -117,17 +117,18 @@ gaps" section above says exactly what won't work yet when you get there.
   Defect Form's title/description/category/trade/severity/recommendation, with an explicit "AI
   suggestion (<confidence text>) — review and correct before saving" banner and
   `severityIsAiSuggested = true` recorded on the saved defect.
-- **Project Knowledge has no management UI yet.** `ProjectKnowledgeEntity`, its DAO, and
-  `ProjectKnowledgeRepository` are real and wired as an optional input the reasoning engine can
-  use to override its default recommendation text (exactly the mechanism
-  `InspectionReasoningEngineTest`'s "project knowledge overrides the default recommendation"
-  test exercises) - but nothing in the app lets an inspector add a knowledge entry yet, and the
-  Defect Form's prefill call currently passes no project knowledge (`projectKnowledge = null`),
-  so it always falls back to the generic "verify against the approved project specification and
-  method statement" text even when project-specific entries exist. Wiring that load is a small,
-  well-scoped follow-up (`ProjectKnowledgeRepository.loadForReasoning(projectId)` already exists)
-  but needs the Defect Form's initial-state seeding to become effect-driven instead of
-  `remember`-once to do it without introducing a race.
+- **Project Knowledge now feeds the Defect Form's prefill.** The Defect Form composable in
+  `DefectViewNavHost` loads `ProjectKnowledgeRepository.loadForReasoning(projectId)` via
+  `produceState` and gates the form behind a brief loading state until that real DB read (plus
+  the reasoning call) resolves - avoiding the earlier race where a `remember`-once seed would
+  never see project knowledge loaded after first composition. A manual (no-AI) defect skips the
+  load entirely, so it never waits on it.
+- **Project Knowledge still has no management UI.** `ProjectKnowledgeEntity`, its DAO, and
+  `ProjectKnowledgeRepository` are real and now actually consulted - but nothing in the app lets
+  an inspector add a knowledge entry yet, so in practice every project currently has none and the
+  reasoning engine still falls back to its generic "verify against the approved project
+  specification and method statement" text. The plumbing works; there's just no data source
+  feeding it yet.
 - **Inspection templates are not implemented.** Spec section 10 also asks for reusable
   inspection templates (checklists per trade/area); nothing in this codebase covers that yet.
 

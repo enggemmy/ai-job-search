@@ -1,5 +1,7 @@
 package com.defectview.app.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
@@ -8,6 +10,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -15,9 +18,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -54,6 +59,7 @@ import com.defectview.app.feature.projects.ProjectViewModel
 import com.defectview.app.feature.reportcenter.ReportsScreen
 import com.defectview.app.feature.reportcenter.ReportsViewModel
 import com.defectview.domain.model.DefectDetection
+import com.defectview.domain.reasoning.ReasoningResult
 import kotlinx.coroutines.launch
 
 private val bottomDestinations = listOf(
@@ -73,6 +79,14 @@ private sealed class CaptureTarget {
 
 /** The photo + context carried from "capture/save inspection" through the editor into the defect form. */
 private data class DefectDraftContext(val projectId: Long, val inspectionId: Long?, val location: String, val photoPath: String)
+
+/** Whether the (project-knowledge-aware) reasoning result for the Defect Form's prefill has
+ * finished loading yet - see the DefectForm composable below for why this can't just be a
+ * `remember` computed synchronously. */
+private sealed class ReasoningLoadState {
+    data object Loading : ReasoningLoadState()
+    data class Ready(val reasoning: ReasoningResult?) : ReasoningLoadState()
+}
 
 private const val DEFAULT_INSPECTOR_NAME = "Site Inspector"
 
@@ -259,27 +273,51 @@ fun DefectViewNavHost(container: AppContainer) {
                         )
                     )
                     val topDetection = draftDetections.maxByOrNull { it.confidenceScore }
-                    val initialReasoning = remember(topDetection) { topDetection?.let { container.reasoningEngine.reason(it) } }
-                    DefectFormScreen(
-                        viewModel = vm,
-                        projectId = context.projectId,
-                        inspectionId = context.inspectionId,
-                        location = context.location,
-                        originalPhotoPath = context.photoPath,
-                        annotations = draftAnnotations,
-                        reportedBy = DEFAULT_INSPECTOR_NAME,
-                        initialReasoning = initialReasoning,
-                        sourceDetection = topDetection,
-                        onSaved = { defect ->
-                            draftContext = null
-                            draftAnnotations = emptyList()
-                            draftDetections = emptyList()
-                            navController.navigate(Destination.DefectDetail.route(defect.id)) {
-                                popUpTo(Destination.Dashboard.route)
+                    // Loads project knowledge (if any) before the form's fields are first
+                    // composed, rather than after - DefectFormScreen seeds its text fields once
+                    // from initialReasoning, so recomputing it post-composition wouldn't refresh
+                    // an already-typed default. Skipped entirely when there's no AI detection to
+                    // reason about, so a manual (no-AI) defect never waits on a DB read.
+                    val reasoningState by produceState<ReasoningLoadState>(
+                        initialValue = if (topDetection == null) ReasoningLoadState.Ready(null) else ReasoningLoadState.Loading,
+                        key1 = topDetection,
+                        key2 = context.projectId
+                    ) {
+                        if (topDetection != null) {
+                            val knowledge = container.projectKnowledgeRepository.loadForReasoning(context.projectId)
+                            value = ReasoningLoadState.Ready(container.reasoningEngine.reason(topDetection, knowledge))
+                        }
+                    }
+
+                    when (val state = reasoningState) {
+                        is ReasoningLoadState.Loading -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
                             }
-                        },
-                        onCancel = { navController.popBackStack() }
-                    )
+                        }
+                        is ReasoningLoadState.Ready -> {
+                            DefectFormScreen(
+                                viewModel = vm,
+                                projectId = context.projectId,
+                                inspectionId = context.inspectionId,
+                                location = context.location,
+                                originalPhotoPath = context.photoPath,
+                                annotations = draftAnnotations,
+                                reportedBy = DEFAULT_INSPECTOR_NAME,
+                                initialReasoning = state.reasoning,
+                                sourceDetection = topDetection,
+                                onSaved = { defect ->
+                                    draftContext = null
+                                    draftAnnotations = emptyList()
+                                    draftDetections = emptyList()
+                                    navController.navigate(Destination.DefectDetail.route(defect.id)) {
+                                        popUpTo(Destination.Dashboard.route)
+                                    }
+                                },
+                                onCancel = { navController.popBackStack() }
+                            )
+                        }
+                    }
                 }
             }
 
