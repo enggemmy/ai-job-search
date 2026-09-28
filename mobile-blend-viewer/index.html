@@ -129,6 +129,14 @@
   .status-card h2 { margin: 0 0 6px; font-size: 16px; text-wrap: balance; }
   .status-card p { margin: 0; color: var(--muted); }
   .status-card.error h2 { color: var(--danger); }
+  .status-card ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); text-align: left; display: grid; gap: 4px; }
+  .status-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .status-actions a, .status-actions button {
+    padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--raised); color: var(--text); text-decoration: none; font-weight: 600; cursor: pointer;
+  }
+  .status-actions .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .share-url { margin-top: 10px; font: 12px var(--mono); color: var(--muted); word-break: break-all; user-select: all; -webkit-user-select: all; }
   .spinner {
     width: 26px; height: 26px; margin: 0 auto 10px;
     border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
@@ -1124,6 +1132,9 @@ window.__blendPocketReady = true;
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
 const $ = (id) => document.getElementById(id);
+// Public link to this page, filled in at build time for hosted copies (see tools/build.mjs --share-url).
+const SHARE_URL = '';
+const IN_ANDROID_WEBVIEW = /; wv\)/.test(navigator.userAgent);
 const fmt = new Intl.NumberFormat();
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1492,7 +1503,67 @@ async function openFile(file) {
   }
 }
 
-$('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
+$('fileInput').addEventListener('change', (e) => { pickerSeen = true; openFile(e.target.files[0]); e.target.value = ''; });
+
+// Some Android in-app browsers (WebViews) never show a file picker, and a web
+// page cannot override that. Detect "tapped Open, but no picker appeared" by
+// watching for the page losing focus or visibility, and offer a way out.
+let pickerSeen = true;
+let pickerTimer;
+const markPicker = () => { pickerSeen = true; };
+addEventListener('blur', markPicker);
+addEventListener('pagehide', markPicker);
+document.addEventListener('visibilitychange', () => { if (document.hidden) markPicker(); });
+$('fileInput').addEventListener('cancel', markPicker);
+$('fileInput').addEventListener('click', () => {
+  pickerSeen = false;
+  clearTimeout(pickerTimer);
+  pickerTimer = setTimeout(() => { if (!pickerSeen) showPickerHelp(); }, 1500);
+});
+
+function showPickerHelp() {
+  const el = $('status');
+  el.hidden = false;
+  el.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'status-card';
+  card.append(Object.assign(document.createElement('h2'), { textContent: 'No file picker appeared?' }));
+  card.append(Object.assign(document.createElement('p'), {
+    textContent: IN_ANDROID_WEBVIEW || !SHARE_URL
+      ? 'The app you opened this page in blocks file pickers. Web pages can\u2019t change that. Open the page in Chrome instead:'
+      : 'Your browser blocked the file picker for this page. Open it in Chrome instead:',
+  }));
+  const steps = document.createElement('ol');
+  const items = SHARE_URL
+    ? ['Tap \u201cOpen in Chrome\u201d below. If it opens inside the app again, use \u201cCopy link\u201d.', 'Paste the link into Chrome and sign in to claude.ai if asked.', 'Tap Open and choose your .blend file.']
+    : ['In the app\u2019s menu (\u22ee), choose \u201cOpen in browser\u201d or \u201cOpen in Chrome\u201d.', 'Tap Open and choose your .blend file.'];
+  for (const t of items) steps.append(Object.assign(document.createElement('li'), { textContent: t }));
+  card.append(steps);
+  const actions = document.createElement('div');
+  actions.className = 'status-actions';
+  if (SHARE_URL) {
+    // intent: URLs hand the link to Chrome itself on Android; elsewhere use the plain link.
+    const android = /Android/i.test(navigator.userAgent);
+    const href = android
+      ? `intent://${SHARE_URL.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(SHARE_URL)};end`
+      : SHARE_URL;
+    actions.append(Object.assign(document.createElement('a'), { className: 'primary', href, target: '_blank', rel: 'noopener', textContent: 'Open in Chrome' }));
+    const copy = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Copy link' });
+    copy.addEventListener('click', () => {
+      navigator.clipboard.writeText(SHARE_URL)
+        .then(() => { copy.textContent = 'Copied'; })
+        .catch(() => { const r = document.createRange(); r.selectNodeContents(url); getSelection().removeAllRanges(); getSelection().addRange(r); copy.textContent = 'Select and copy the link below'; });
+    });
+    actions.append(copy);
+  }
+  const close = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Close' });
+  close.addEventListener('click', () => showStatus(null));
+  actions.append(close);
+  card.append(actions);
+  const url = Object.assign(document.createElement('div'), { className: 'share-url', textContent: SHARE_URL });
+  if (SHARE_URL) card.append(url);
+  el.append(card);
+}
 
 let dragDepth = 0;
 addEventListener('dragenter', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { dragDepth++; $('drop').hidden = false; e.preventDefault(); } });
