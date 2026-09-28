@@ -1,0 +1,13 @@
+{
+  "name": "blend-pocket",
+  "private": true,
+  "description": "Mobile-friendly HTML viewer for Blender .blend files",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node tools/test-parser.mjs"
+  },
+  "devDependencies": {
+    "fzstd": "0.1.1"
+  }
+}

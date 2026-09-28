@@ -1,0 +1,973 @@
+<title>Blend Pocket</title>
+<meta name="theme-color" content="#17191c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Single dark theme on purpose: a 3D viewport reads best on a dark ground,
+     the same convention Blender and every DCC app use. */
+  :root {
+    color-scheme: dark;
+    --ground: #2a2c30;
+    --chrome: #17191c;
+    --raised: #212428;
+    --raised-2: #2a2e33;
+    --line: #353940;
+    --text: #e9e6df;
+    --muted: #9b9ea6;
+    --faint: #6c7078;
+    --accent: #f0a43a;
+    --accent-ink: #1d1406;
+    --warn: #e8b04b;
+    --danger: #ef6b6b;
+    --axis-x: #e5484d;
+    --axis-y: #86c34a;
+    --axis-z: #4d8ef0;
+    --ui: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --sheet-peek: 64px;
+    --radius: 10px;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--chrome);
+    color: var(--text);
+    font: 14px/1.45 var(--ui);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+
+  /* Top bar */
+  .bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+  .brand svg { width: 22px; height: 22px; }
+  .file { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .chip {
+    font: 500 11px/1 var(--mono); letter-spacing: .02em;
+    padding: 5px 7px; border-radius: 999px;
+    background: var(--raised-2); color: var(--text); white-space: nowrap;
+  }
+  .btn-open {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 14px; border: 0; border-radius: 999px;
+    background: var(--accent); color: var(--accent-ink); font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn-open svg { width: 16px; height: 16px; }
+  .btn-open:active { transform: translateY(1px); }
+  @media (max-width: 420px) { .brand span { display: none; } }
+
+  /* Viewport */
+  .stage { position: relative; min-height: 0; background: var(--ground); overflow: hidden; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #gizmo { position: absolute; left: 10px; top: 10px; width: 84px; height: 84px; pointer-events: none; }
+
+  .rail {
+    position: absolute; right: 12px; top: 12px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .tool {
+    width: 52px; padding: 7px 0 5px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: color-mix(in srgb, var(--chrome) 88%, transparent);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    cursor: pointer;
+  }
+  .tool svg { width: 20px; height: 20px; }
+  .tool small { font-size: 10px; line-height: 1; color: var(--muted); letter-spacing: .02em; }
+  .tool[aria-pressed="true"] { border-color: var(--accent); }
+  .tool[aria-pressed="true"] small { color: var(--accent); }
+  .tool:active { background: var(--raised-2); }
+
+  .toast {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--chrome); border: 1px solid var(--line);
+    font-size: 12px; color: var(--text); pointer-events: none;
+    opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+
+  .status {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    padding-inline: 24px; text-align: center; pointer-events: none;
+  }
+  .status-card {
+    max-width: 30rem; padding: 18px 20px; border-radius: 14px;
+    background: var(--chrome); border: 1px solid var(--line);
+    pointer-events: auto;
+  }
+  .status-card h2 { margin: 0 0 6px; font-size: 16px; text-wrap: balance; }
+  .status-card p { margin: 0; color: var(--muted); }
+  .status-card.error h2 { color: var(--danger); }
+  .spinner {
+    width: 26px; height: 26px; margin: 0 auto 10px;
+    border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .drop {
+    position: absolute; inset: 10px; border: 2px dashed var(--accent); border-radius: 16px;
+    display: grid; place-items: center; font-weight: 600; font-size: 16px;
+    background: color-mix(in srgb, var(--chrome) 70%, transparent);
+  }
+
+  /* Bottom sheet (phone) / side panel (wide) */
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: var(--sheet-peek);
+    display: flex; flex-direction: column;
+    background: var(--chrome); border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: height .25s ease;
+  }
+  .sheet.open { height: min(58%, 480px); }
+  .sheet:not(.open) .tabs, .sheet:not(.open) .panel { visibility: hidden; }
+  .sheet-head {
+    flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+    padding: 8px 16px 10px; border: 0; background: none; cursor: pointer; text-align: left;
+  }
+  .handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; }
+  .summary { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .summary strong { font-weight: 600; }
+  .summary .nums { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .tabs { flex: none; display: flex; gap: 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+  .tab {
+    padding: 8px 10px; border: 0; background: none; cursor: pointer;
+    color: var(--muted); font-weight: 600; font-size: 13px;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .panel { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 8px 16px; -webkit-overflow-scrolling: touch; }
+
+  .ol-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+  .ol-row.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .ol-main {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+    padding: 8px 8px; border: 0; background: none; cursor: pointer; text-align: left;
+  }
+  .ol-main svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
+  .ol-row.selected .ol-main svg { color: var(--accent); }
+  .ol-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ol-meta { font: 11px var(--mono); color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ol-eye { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: none; cursor: pointer; color: var(--muted); border-radius: 8px; }
+  .ol-eye svg { width: 18px; height: 18px; }
+  .ol-row.hidden .ol-name, .ol-row.hidden .ol-main svg { opacity: .4; }
+  .ol-row.hidden .ol-eye { color: var(--faint); }
+  .ol-empty { padding: 16px 8px; color: var(--muted); }
+
+  .info { display: grid; gap: 16px; padding: 8px; }
+  .thumb { display: flex; gap: 14px; align-items: center; }
+  .thumb canvas { width: 96px; height: auto; border-radius: 8px; background: var(--raised); flex: none; image-rendering: auto; }
+  .thumb p { margin: 0; color: var(--muted); font-size: 13px; }
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; font: 12.5px/1.5 var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0 0 6px; }
+  .warn { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .warn li { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--text); font-size: 13px; border-left: 3px solid var(--warn); }
+  .link-btn { justify-self: start; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
+  .hint { color: var(--faint); font-size: 12px; margin: 0; }
+
+  @media (min-width: 900px) {
+    .stage { margin-right: 340px; }
+    .sheet:not(.open) .tabs, .sheet:not(.open) .panel { visibility: visible; }
+    .sheet, .sheet.open {
+      left: auto; right: -340px; top: 0; width: 340px; height: auto;
+      border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
+    }
+    .sheet-head { cursor: default; }
+    .handle { display: none; }
+    .stage { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .toast { transition: none; }
+    .spinner { animation-duration: 2.4s; }
+  }
+</style>
+
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z" stroke="var(--accent)"/>
+        <path d="M4 7.4 12 12l8-4.6M12 12v9.2" stroke-opacity=".7"/>
+      </svg>
+      <span>Blend Pocket</span>
+    </div>
+    <div class="file">
+      <span class="file-name" id="fileName">No file</span>
+      <span class="chip" id="fileChip" hidden></span>
+    </div>
+    <button class="btn-open" id="openBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Open
+    </button>
+    <input type="file" id="fileInput" hidden>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="view" aria-label="3D viewport. Drag to orbit, pinch to zoom, two-finger drag to pan."></canvas>
+    <canvas id="gizmo" width="168" height="168" aria-hidden="true"></canvas>
+
+    <div class="rail" role="toolbar" aria-label="Viewport">
+      <button class="tool" id="frameBtn" type="button" title="Frame all (Home)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><circle cx="12" cy="12" r="3"/></svg>
+        <small>Frame</small>
+      </button>
+      <button class="tool" id="shadeBtn" type="button" title="Shading: Solid, Material, Wireframe (Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" fill-opacity=".35"/></svg>
+        <small id="shadeLabel">Material</small>
+      </button>
+      <button class="tool" id="viewBtn" type="button" title="Cycle view: Front (1), Right (3), Top (7), Perspective (5)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+        <small id="viewLabel">Persp</small>
+      </button>
+      <button class="tool" id="smoothBtn" type="button" title="Normals: Auto (as saved in Blender), Flat, Smooth">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18c3-9 13-9 16 0"/><path d="M4 18h16" stroke-opacity=".5"/></svg>
+        <small id="smoothLabel">Auto</small>
+      </button>
+      <button class="tool" id="gridBtn" type="button" aria-pressed="true" title="Floor grid">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        <small>Grid</small>
+      </button>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="status" id="status" hidden></div>
+    <div class="drop" id="drop" hidden>Drop a .blend file to open it</div>
+
+    <section class="sheet" id="sheet" aria-label="Scene">
+      <button class="sheet-head" id="sheetToggle" type="button" aria-expanded="false" aria-controls="sheetBody">
+        <span class="handle" aria-hidden="true"></span>
+        <span class="summary"><strong id="sumTitle">Scene</strong><span class="nums" id="sumNums">—</span></span>
+      </button>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabOutliner" aria-selected="true" aria-controls="outliner" type="button">Outliner</button>
+        <button class="tab" role="tab" id="tabFile" aria-selected="false" aria-controls="fileInfo" type="button">File</button>
+      </div>
+      <div class="panel" id="outliner" role="tabpanel" aria-labelledby="tabOutliner"></div>
+      <div class="panel" id="fileInfo" role="tabpanel" aria-labelledby="tabFile" hidden></div>
+    </section>
+  </main>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "fzstd": "https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { decompress as zstdDecompress } from 'fzstd';
+import { parseBlend } from './blend-parser.js';
+import { SAMPLE_NAME, SAMPLE_BASE64 } from './sample-blend.js';
+
+// Blender is Z-up; keep its coordinates as-is and make three.js Z-up instead.
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+const $ = (id) => document.getElementById(id);
+const fmt = new Intl.NumberFormat();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- renderer
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.setClearColor(0x2a2c30);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+scene.add(new THREE.HemisphereLight(0xe6ecff, 0x3a3430, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.8);
+key.position.set(4, -6, 9);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xbfd4ff, 0.6);
+rim.position.set(-6, 5, 3);
+scene.add(rim);
+
+const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
+camera.position.set(7.4, -6.9, 5);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = !reduceMotion;
+controls.dampingFactor = 0.12;
+controls.screenSpacePanning = true;
+
+// Floor grid on the XY plane plus the red X / green Y axis lines Blender draws.
+const grid = new THREE.Group();
+function buildGrid(size) {
+  grid.clear();
+  const step = Math.pow(10, Math.floor(Math.log10(Math.max(size, 0.1))));
+  const half = Math.ceil(size / step) * step * 2;
+  const g = new THREE.GridHelper(half * 2, Math.round((half * 2) / step), 0x3a3e45, 0x33363c);
+  g.rotation.x = Math.PI / 2;
+  g.material.transparent = true;
+  g.material.opacity = 0.9;
+  grid.add(g);
+  const axis = (a, b, color) => {
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    grid.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 })));
+  };
+  axis(new THREE.Vector3(-half * 2, 0, 0), new THREE.Vector3(half * 2, 0, 0), 0xb13a3e);
+  axis(new THREE.Vector3(0, -half * 2, 0), new THREE.Vector3(0, half * 2, 0), 0x6c9a3c);
+}
+buildGrid(5);
+scene.add(grid);
+
+const content = new THREE.Group();
+scene.add(content);
+
+let needsRender = true;
+const requestRender = () => { needsRender = true; };
+controls.addEventListener('change', requestRender);
+
+// On phones the bottom sheet covers part of the canvas. Shift the projection
+// centre up so framed models sit in the visible area instead of under the sheet.
+let coveredPx = 0;
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  const sheet = document.getElementById('sheet');
+  const sr = sheet.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+  coveredPx = Math.max(0, Math.min(h * 0.7, cr.bottom - Math.max(sr.top, cr.top)));
+  if (sr.left >= cr.right - 1) coveredPx = 0; // side panel layout
+  camera.aspect = w / h;
+  if (coveredPx) camera.setViewOffset(w, h, 0, coveredPx / 2, w, h); else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  requestRender();
+}
+new ResizeObserver(resize).observe(canvas);
+document.getElementById('sheet').addEventListener('transitionend', resize);
+
+let tween = null;
+function loop(t) {
+  requestAnimationFrame(loop);
+  if (tween) {
+    const k = Math.min(1, (t - tween.t0) / tween.dur);
+    const e = 1 - Math.pow(1 - k, 3);
+    camera.position.lerpVectors(tween.p0, tween.p1, e);
+    controls.target.lerpVectors(tween.c0, tween.c1, e);
+    if (k >= 1) tween = null;
+    needsRender = true;
+  }
+  if (controls.update()) needsRender = true;
+  if (needsRender) {
+    needsRender = false;
+    renderer.render(scene, camera);
+    drawGizmo();
+  }
+}
+requestAnimationFrame(loop);
+
+// ---------------------------------------------------------------- axis gizmo
+const gctx = $('gizmo').getContext('2d');
+const AXES = [
+  { v: new THREE.Vector3(1, 0, 0), label: 'X', color: '#e5484d' },
+  { v: new THREE.Vector3(0, 1, 0), label: 'Y', color: '#86c34a' },
+  { v: new THREE.Vector3(0, 0, 1), label: 'Z', color: '#4d8ef0' },
+];
+function drawGizmo() {
+  const s = 168, c = s / 2, r = 54;
+  gctx.clearRect(0, 0, s, s);
+  const q = camera.quaternion.clone().invert();
+  const pts = [];
+  for (const a of AXES) {
+    const p = a.v.clone().applyQuaternion(q);
+    pts.push({ ...a, x: c + p.x * r, y: c - p.y * r, z: p.z, pos: true });
+    pts.push({ ...a, x: c - p.x * r, y: c + p.y * r, z: -p.z, pos: false });
+  }
+  pts.sort((a, b) => a.z - b.z);
+  for (const p of pts) {
+    if (p.pos) {
+      gctx.strokeStyle = p.color; gctx.lineWidth = 4;
+      gctx.beginPath(); gctx.moveTo(c, c); gctx.lineTo(p.x, p.y); gctx.stroke();
+    }
+    gctx.beginPath(); gctx.arc(p.x, p.y, p.pos ? 15 : 11, 0, Math.PI * 2);
+    gctx.fillStyle = p.pos ? p.color : p.color + '55';
+    gctx.fill();
+    if (p.pos) {
+      gctx.fillStyle = '#17191c'; gctx.font = '700 17px Figtree, system-ui, sans-serif';
+      gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+      gctx.fillText(p.label, p.x, p.y + 1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- scene state
+const state = {
+  entries: [],          // { name, typeName, parent, object3d, mesh?, meta, hidden }
+  selected: null,
+  shading: 'material',  // solid | material | wire
+  normals: 'auto',      // auto (per mesh, as saved) | flat | smooth
+  viewIndex: 0,
+};
+
+const solidMat = new THREE.MeshStandardMaterial({ color: 0xc9cacd, roughness: 0.62, metalness: 0, flatShading: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
+const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
+const wireMat = new THREE.LineBasicMaterial({ color: 0xc4c7cd });
+const selectMat = new THREE.LineBasicMaterial({ color: 0xf0a43a });
+const helperMat = new THREE.LineBasicMaterial({ color: 0x8d9199 });
+
+function makeSlotMaterial(m) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xc9cacd, roughness: 0.5, metalness: 0, flatShading: true, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+  if (m) {
+    // Blender stores viewport colours in scene-linear space.
+    mat.color.setRGB(m.color[0], m.color[1], m.color[2], THREE.LinearSRGBColorSpace);
+    mat.metalness = m.metallic;
+    mat.roughness = m.roughness;
+    if (m.alpha < 0.999) { mat.transparent = true; mat.opacity = m.alpha; }
+  }
+  return mat;
+}
+
+function applyShading() {
+  for (const e of state.entries) {
+    const o = e.object3d;
+    if (!o || !o.isMesh) continue;
+    o.material = state.shading === 'wire' ? hiddenMat : state.shading === 'solid' ? solidMat : o.userData.slotMats;
+    const flat = state.normals === 'auto' ? o.userData.autoFlat : state.normals === 'flat';
+    if (state.shading === 'solid') o.material = o.userData.solidMat;
+    for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+      if ('flatShading' in m && m.flatShading !== flat) { m.flatShading = flat; m.needsUpdate = true; }
+    }
+    let wire = o.getObjectByName('wire');
+    if (state.shading === 'wire' && !wire) {
+      wire = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 1), wireMat);
+      wire.name = 'wire';
+      o.add(wire);
+    }
+    if (wire) wire.visible = state.shading === 'wire';
+  }
+  $('shadeLabel').textContent = { solid: 'Solid', material: 'Material', wire: 'Wire' }[state.shading];
+  $('smoothLabel').textContent = { auto: 'Auto', flat: 'Flat', smooth: 'Smooth' }[state.normals];
+  requestRender();
+}
+
+function clearScene() {
+  content.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    const mats = o.userData.slotMats;
+    if (mats) [].concat(mats).forEach((m) => m.dispose());
+    if (o.userData.solidMat) o.userData.solidMat.dispose();
+  });
+  content.clear();
+  state.entries = [];
+  state.selected = null;
+}
+
+// Small wire glyphs for cameras, lights and empties so the layout reads.
+function helperFor(typeName) {
+  const pts = [];
+  if (typeName === 'Camera') {
+    const c = [[-0.5, -0.32, -1], [0.5, -0.32, -1], [0.5, 0.32, -1], [-0.5, 0.32, -1]];
+    for (let i = 0; i < 4; i++) pts.push(0, 0, 0, ...c[i], ...c[i], ...c[(i + 1) % 4]);
+    pts.push(-0.3, 0.4, -1, 0, 0.6, -1, 0, 0.6, -1, 0.3, 0.4, -1, 0.3, 0.4, -1, -0.3, 0.4, -1);
+  } else if (typeName === 'Light') {
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, b = ((i + 1) / n) * Math.PI * 2;
+      pts.push(Math.cos(a) * 0.15, Math.sin(a) * 0.15, 0, Math.cos(b) * 0.15, Math.sin(b) * 0.15, 0);
+    }
+    pts.push(0, 0, 0, 0, 0, -1);
+  } else {
+    pts.push(-0.4, 0, 0, 0.4, 0, 0, 0, -0.4, 0, 0, 0.4, 0, 0, 0, -0.4, 0, 0, 0.4);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(g, helperMat);
+}
+
+// ---------------------------------------------------------------- .blend → three.js
+function buildFromBlend(result) {
+  const geoCache = new Map();
+  for (const o of result.objects) {
+    let obj;
+    let meta = o.typeName;
+    if (o.mesh) {
+      const m = o.mesh;
+      let geo = geoCache.get(m);
+      if (!geo) {
+        geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
+        geo.setIndex(new THREE.BufferAttribute(m.indices, 1));
+        geo.computeVertexNormals();
+        geo.computeBoundingSphere();
+        geoCache.set(m, geo);
+      }
+      const slotMats = (m.materials.length ? m.materials : [null]).map(makeSlotMaterial);
+      geo.clearGroups();
+      for (const g of m.groups) geo.addGroup(g.start, g.count, Math.min(g.materialIndex, slotMats.length - 1));
+      obj = new THREE.Mesh(geo, slotMats);
+      obj.userData.slotMats = slotMats;
+      obj.userData.solidMat = solidMat.clone();
+      obj.userData.autoFlat = m.smoothRatio < 0.5;
+      meta = `${fmt.format(m.vertCount)} v · ${fmt.format(m.faceCount)} f`;
+    } else {
+      obj = helperFor(o.typeName);
+    }
+    obj.matrixAutoUpdate = false;
+    obj.matrix.fromArray(o.matrix);
+    obj.name = o.name;
+    content.add(obj);
+    state.entries.push({ name: o.name, typeName: o.typeName, parent: o.parent, object3d: obj, meta, mesh: o.mesh, modifiers: o.hasModifiers, hidden: false });
+  }
+  content.updateMatrixWorld(true);
+}
+
+// ---------------------------------------------------------------- other formats
+const Y_UP = new Set(['glb', 'gltf', 'obj', 'fbx']);
+async function loadOther(ext, buffer) {
+  let root;
+  if (ext === 'glb' || ext === 'gltf') {
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+    root = await new Promise((res, rej) => new GLTFLoader().parse(buffer, '', (g) => res(g.scene), rej));
+  } else if (ext === 'obj') {
+    const { OBJLoader } = await import('three/addons/loaders/OBJLoader.js');
+    root = new OBJLoader().parse(new TextDecoder().decode(buffer));
+  } else if (ext === 'fbx') {
+    const { FBXLoader } = await import('three/addons/loaders/FBXLoader.js');
+    root = new FBXLoader().parse(buffer, '');
+  } else if (ext === 'stl' || ext === 'ply') {
+    const mod = ext === 'stl' ? await import('three/addons/loaders/STLLoader.js') : await import('three/addons/loaders/PLYLoader.js');
+    const Loader = ext === 'stl' ? mod.STLLoader : mod.PLYLoader;
+    const geo = new Loader().parse(buffer);
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    root = new THREE.Mesh(geo);
+    root.name = 'Mesh';
+  }
+  if (Y_UP.has(ext)) root.rotation.x = Math.PI / 2;
+  root.updateMatrixWorld(true);
+  let i = 0;
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const src = Array.isArray(o.material) ? o.material : [o.material];
+    const slotMats = src.map((m) => {
+      if (m && m.isMeshStandardMaterial) { m.flatShading = true; m.side = THREE.DoubleSide; return m; }
+      const s = makeSlotMaterial(null);
+      if (m && m.color) s.color.copy(m.color);
+      if (m && m.map) s.map = m.map;
+      return s;
+    });
+    o.userData.slotMats = Array.isArray(o.material) ? slotMats : slotMats[0];
+    o.userData.solidMat = solidMat.clone();
+    o.userData.autoFlat = false; // exports carry their own normals
+    const pos = o.geometry.attributes.position;
+    const tris = o.geometry.index ? o.geometry.index.count / 3 : pos.count / 3;
+    state.entries.push({ name: o.name || `Mesh ${++i}`, typeName: 'Mesh', parent: null, object3d: o, mesh: { vertCount: pos.count, triCount: tris }, meta: `${fmt.format(pos.count)} v · ${fmt.format(tris)} tris`, hidden: false });
+  });
+  content.add(root);
+  content.updateMatrixWorld(true);
+}
+
+// ---------------------------------------------------------------- loading
+let loadToken = 0;
+function showStatus(kind, title, text) {
+  const el = $('status');
+  if (!kind) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = `status-card ${kind}`;
+  if (kind === 'busy') card.append(Object.assign(document.createElement('div'), { className: 'spinner' }));
+  card.append(Object.assign(document.createElement('h2'), { textContent: title }));
+  if (text) card.append(Object.assign(document.createElement('p'), { textContent: text }));
+  el.append(card);
+}
+
+const sizeLabel = (n) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const nextFrame = () => new Promise((r) => setTimeout(r, 30));
+
+async function openBuffer(name, buffer) {
+  const token = ++loadToken;
+  const ext = (name.split('.').pop() || '').toLowerCase().replace(/\d+$/, '');
+  showStatus('busy', `Opening ${name}`, `Reading ${sizeLabel(buffer.byteLength)}…`);
+  await nextFrame();
+  try {
+    let result = null;
+    const head = new Uint8Array(buffer, 0, Math.min(8, buffer.byteLength));
+    const looksBlend = ext === 'blend' || String.fromCharCode(...head.subarray(0, 7)) === 'BLENDER' || (head[0] === 0x28 && head[1] === 0xb5) || (head[0] === 0x1f && head[1] === 0x8b);
+    if (looksBlend) {
+      result = await parseBlend(buffer, { zstdDecompress });
+      if (token !== loadToken) return;
+      clearScene();
+      buildFromBlend(result);
+    } else if (['glb', 'gltf', 'obj', 'fbx', 'stl', 'ply'].includes(ext)) {
+      clearScene();
+      await loadOther(ext, buffer);
+    } else {
+      throw new Error(`".${ext}" files are not supported. Open a .blend file, or a GLB, OBJ, FBX, STL or PLY export.`);
+    }
+    if (token !== loadToken) return;
+    showStatus(null);
+    $('fileName').textContent = name;
+    const chip = $('fileChip');
+    chip.hidden = false;
+    chip.textContent = result ? `Blender ${result.version}` : ext.toUpperCase();
+    applyShading();
+    fitGrid();
+    setView(0, false);
+    frameAll(false);
+    renderOutliner();
+    renderFileInfo(name, buffer.byteLength, result);
+    const meshes = state.entries.filter((e) => e.mesh);
+    if (!meshes.length) showStatus('error', 'No meshes to draw', 'This file opened, but it has no mesh objects the viewer can draw. The File tab lists what it contains.');
+  } catch (err) {
+    if (token !== loadToken) return;
+    console.error(err);
+    showStatus('error', `Couldn't open ${name}`, err.message || String(err));
+  }
+}
+
+async function openFile(file) {
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    await openBuffer(file.name, buffer);
+  } catch (err) {
+    showStatus('error', `Couldn't read ${file.name}`, 'The browser could not read this file. It may be too large for this device’s memory.');
+  }
+}
+
+$('openBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
+
+let dragDepth = 0;
+addEventListener('dragenter', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { dragDepth++; $('drop').hidden = false; e.preventDefault(); } });
+addEventListener('dragover', (e) => e.preventDefault());
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').hidden = true; } });
+addEventListener('drop', (e) => { e.preventDefault(); dragDepth = 0; $('drop').hidden = true; openFile(e.dataTransfer?.files?.[0]); });
+
+// ---------------------------------------------------------------- camera
+const VIEWS = [
+  { label: 'Persp', dir: new THREE.Vector3(0.66, -0.62, 0.42) },
+  { label: 'Front', dir: new THREE.Vector3(0, -1, 0) },
+  { label: 'Right', dir: new THREE.Vector3(1, 0, 0) },
+  { label: 'Top', dir: new THREE.Vector3(0, -1e-4, 1) },
+];
+
+function visibleBox(entries) {
+  const box = new THREE.Box3();
+  for (const e of entries) if (e.mesh && !e.hidden) box.expandByObject(e.object3d);
+  if (box.isEmpty()) for (const e of entries) if (!e.hidden) box.expandByObject(e.object3d);
+  if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(2, 2, 2));
+  return box;
+}
+
+function moveCamera(target, dir, dist, animate = true) {
+  const p1 = target.clone().addScaledVector(dir.clone().normalize(), dist);
+  camera.near = Math.max(dist / 1000, 1e-4);
+  camera.far = dist * 100;
+  camera.updateProjectionMatrix();
+  if (!animate || reduceMotion) {
+    tween = null;
+    camera.position.copy(p1);
+    controls.target.copy(target);
+    controls.update();
+  } else {
+    tween = { t0: performance.now(), dur: 380, p0: camera.position.clone(), p1, c0: controls.target.clone(), c1: target.clone() };
+  }
+  requestRender();
+}
+
+function frameBox(box, animate = true) {
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const r = Math.max(sphere.radius, 1e-3);
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const h = canvas.clientHeight || 1;
+  const visible = Math.max(0.3, (h - coveredPx) / h);
+  const vfov = 2 * Math.atan(Math.tan(fov / 2) * visible);
+  const fit = Math.min(vfov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect));
+  const dist = (r / Math.sin(fit / 2)) * 1.05;
+  const dir = camera.position.clone().sub(controls.target);
+  moveCamera(sphere.center, dir.lengthSq() ? dir : VIEWS[0].dir, dist, animate);
+}
+const frameAll = (animate = true) => frameBox(visibleBox(state.entries), animate);
+const frameSelected = () => state.selected && frameBox(visibleBox([state.selected]));
+
+function setView(i, animate = true) {
+  state.viewIndex = i;
+  const dist = camera.position.distanceTo(controls.target) || 10;
+  moveCamera(controls.target.clone(), VIEWS[i].dir, dist, animate);
+  $('viewLabel').textContent = VIEWS[i].label;
+}
+
+function fitGrid() {
+  const box = visibleBox(state.entries);
+  const size = box.getSize(new THREE.Vector3());
+  buildGrid(Math.max(size.x, size.y, 1));
+}
+
+// ---------------------------------------------------------------- selection
+function select(entry, { frame = false } = {}) {
+  if (state.selected?.object3d) {
+    const old = state.selected.object3d.getObjectByName('selection');
+    if (old) { old.geometry.dispose(); old.removeFromParent(); }
+  }
+  state.selected = entry && state.selected !== entry ? entry : entry && frame ? entry : null;
+  if (state.selected?.object3d?.isMesh) {
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(state.selected.object3d.geometry, 30), selectMat);
+    lines.name = 'selection';
+    state.selected.object3d.add(lines);
+  }
+  if (frame && state.selected) frameSelected();
+  document.querySelectorAll('.ol-row').forEach((r) => r.classList.toggle('selected', r.dataset.name === state.selected?.name));
+  requestRender();
+}
+
+const raycaster = new THREE.Raycaster();
+let down = null;
+canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6 || performance.now() - down.t > 400) return;
+  const r = canvas.getBoundingClientRect();
+  raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const meshes = state.entries.filter((x) => x.mesh && !x.hidden).map((x) => x.object3d);
+  const hit = raycaster.intersectObjects(meshes, false)[0];
+  const entry = hit && state.entries.find((x) => x.object3d === hit.object);
+  if (entry) select(entry); else if (state.selected) select(null);
+});
+
+// ---------------------------------------------------------------- tools
+let toastTimer;
+function toast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1100);
+}
+const SHADES = ['solid', 'material', 'wire'];
+function cycleShading() {
+  state.shading = SHADES[(SHADES.indexOf(state.shading) + 1) % SHADES.length];
+  applyShading();
+  toast({ solid: 'Solid shading', material: 'Material preview', wire: 'Wireframe' }[state.shading]);
+}
+$('frameBtn').addEventListener('click', () => (state.selected ? frameSelected() : frameAll()));
+$('shadeBtn').addEventListener('click', cycleShading);
+$('viewBtn').addEventListener('click', () => { setView((state.viewIndex + 1) % VIEWS.length); toast(`${VIEWS[state.viewIndex].label} view`); });
+const NORMALS = ['auto', 'flat', 'smooth'];
+$('smoothBtn').addEventListener('click', () => {
+  state.normals = NORMALS[(NORMALS.indexOf(state.normals) + 1) % NORMALS.length];
+  applyShading();
+  toast({ auto: 'Shading as saved in Blender', flat: 'Flat shading', smooth: 'Smooth shading' }[state.normals]);
+});
+$('gridBtn').addEventListener('click', (e) => {
+  grid.visible = !grid.visible;
+  e.currentTarget.setAttribute('aria-pressed', String(grid.visible));
+  requestRender();
+});
+
+// Blender's numpad conventions on desktop keyboards.
+addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.code;
+  if (k === 'Numpad1' || e.key === '1') setView(1);
+  else if (k === 'Numpad3' || e.key === '3') setView(2);
+  else if (k === 'Numpad7' || e.key === '7') setView(3);
+  else if (k === 'Numpad5' || e.key === '5') setView(0);
+  else if (k === 'Home') frameAll();
+  else if (k === 'NumpadDecimal' || e.key === '.') frameSelected();
+  else if (e.key === 'z' || e.key === 'Z') cycleShading();
+  else return;
+  e.preventDefault();
+});
+
+// ---------------------------------------------------------------- sheet & panels
+$('sheetToggle').addEventListener('click', () => {
+  if (matchMedia('(min-width: 900px)').matches) return;
+  const open = $('sheet').classList.toggle('open');
+  $('sheetToggle').setAttribute('aria-expanded', String(open));
+  if (reduceMotion) resize();
+});
+function selectTab(which) {
+  const outl = which === 'outliner';
+  $('tabOutliner').setAttribute('aria-selected', String(outl));
+  $('tabFile').setAttribute('aria-selected', String(!outl));
+  $('outliner').hidden = !outl;
+  $('fileInfo').hidden = outl;
+  if (!$('sheet').classList.contains('open') && !matchMedia('(min-width: 900px)').matches) {
+    $('sheet').classList.add('open');
+    $('sheetToggle').setAttribute('aria-expanded', 'true');
+    if (reduceMotion) resize();
+  }
+}
+$('tabOutliner').addEventListener('click', () => selectTab('outliner'));
+$('tabFile').addEventListener('click', () => selectTab('file'));
+
+const ICONS = {
+  Mesh: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 1.8 13.6 5v6L8 14.2 2.4 11V5Z"/><path d="M2.4 5 8 8.2 13.6 5M8 8.2v6"/></svg>',
+  Camera: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="1.5" y="4.5" width="9" height="7" rx="1"/><path d="m10.5 7 4-2v6l-4-2"/></svg>',
+  Light: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="7" r="3.5"/><path d="M6.5 13h3M8 1v.5M2 7h.5M13.5 7h.5"/></svg>',
+  Other: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 2v12M2 8h12M4 4l8 8M12 4l-8 8" stroke-opacity=".8"/></svg>',
+};
+const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l16 16M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8M6.3 7.4A16.6 16.6 0 0 0 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.4 4.1-1"/></svg>';
+
+function renderOutliner() {
+  const root = $('outliner');
+  root.innerHTML = '';
+  const meshes = state.entries.filter((e) => e.mesh);
+  const verts = meshes.reduce((s, e) => s + e.mesh.vertCount, 0);
+  const tris = meshes.reduce((s, e) => s + e.mesh.triCount, 0);
+  $('sumTitle').textContent = `${state.entries.length} object${state.entries.length === 1 ? '' : 's'}`;
+  $('sumNums').textContent = `${fmt.format(verts)} verts · ${fmt.format(tris)} tris`;
+  if (!state.entries.length) {
+    root.append(Object.assign(document.createElement('p'), { className: 'ol-empty', textContent: 'This file has no objects.' }));
+    return;
+  }
+  const names = new Set(state.entries.map((e) => e.name));
+  const children = new Map();
+  for (const e of state.entries) {
+    const p = e.parent && names.has(e.parent) ? e.parent : '';
+    if (!children.has(p)) children.set(p, []);
+    children.get(p).push(e);
+  }
+  const walk = (parent, depth) => {
+    for (const e of (children.get(parent) || []).sort((a, b) => a.name.localeCompare(b.name))) {
+      const row = document.createElement('div');
+      row.className = 'ol-row' + (e.hidden ? ' hidden' : '') + (state.selected === e ? ' selected' : '');
+      row.dataset.name = e.name;
+      const main = document.createElement('button');
+      main.type = 'button';
+      main.className = 'ol-main';
+      main.style.paddingLeft = `${8 + depth * 18}px`;
+      main.innerHTML = ICONS[e.typeName] || ICONS.Other;
+      main.append(
+        Object.assign(document.createElement('span'), { className: 'ol-name', textContent: e.name }),
+        Object.assign(document.createElement('span'), { className: 'ol-meta', textContent: e.meta }),
+      );
+      main.title = e.modifiers ? `${e.name} (modifiers not applied in preview)` : e.name;
+      main.addEventListener('click', () => select(e, { frame: true }));
+      const eye = document.createElement('button');
+      eye.type = 'button';
+      eye.className = 'ol-eye';
+      eye.setAttribute('aria-label', `${e.hidden ? 'Show' : 'Hide'} ${e.name}`);
+      eye.innerHTML = e.hidden ? EYE_OFF : EYE;
+      eye.addEventListener('click', () => {
+        e.hidden = !e.hidden;
+        e.object3d.visible = !e.hidden;
+        row.classList.toggle('hidden', e.hidden);
+        eye.innerHTML = e.hidden ? EYE_OFF : EYE;
+        eye.setAttribute('aria-label', `${e.hidden ? 'Show' : 'Hide'} ${e.name}`);
+        requestRender();
+      });
+      row.append(main, eye);
+      root.append(row);
+      walk(e.name, depth + 1);
+    }
+  };
+  walk('', 0);
+}
+
+function renderFileInfo(name, size, r) {
+  const root = $('fileInfo');
+  root.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'info';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'thumb';
+  if (r?.thumbnail) {
+    const c = document.createElement('canvas');
+    c.width = r.thumbnail.width;
+    c.height = r.thumbnail.height;
+    c.getContext('2d').putImageData(new ImageData(r.thumbnail.rgba, r.thumbnail.width, r.thumbnail.height), 0, 0);
+    c.setAttribute('role', 'img');
+    c.setAttribute('aria-label', 'Thumbnail saved inside the file');
+    thumb.append(c);
+  }
+  thumb.append(Object.assign(document.createElement('p'), {
+    textContent: r?.thumbnail ? 'Thumbnail Blender saved inside this file.' : r ? 'No thumbnail saved in this file. Blender only writes one when saving from its window.' : 'Exported model file.',
+  }));
+  wrap.append(thumb);
+
+  const dl = document.createElement('dl');
+  dl.className = 'facts';
+  const fact = (k, v) => dl.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: v }));
+  fact('File', name);
+  fact('Size on disk', sizeLabel(size));
+  if (r) {
+    fact('Saved by', `Blender ${r.version}`);
+    fact('Compression', { zstd: 'Zstandard', gzip: 'gzip' }[r.compression] || 'None');
+    if (r.compression) fact('Uncompressed', sizeLabel(r.dataSize));
+    fact('Format', `${r.pointerSize * 8}-bit, ${r.endian}-endian`);
+    fact('Data blocks', fmt.format(r.blockCount));
+  }
+  wrap.append(dl);
+
+  if (r) {
+    const inv = Object.entries(r.inventory).filter(([k]) => !['Brushes'].includes(k)).sort((a, b) => b[1] - a[1]);
+    if (inv.length) {
+      const sec = document.createElement('div');
+      sec.append(Object.assign(document.createElement('p'), { className: 'section-label', textContent: 'Data in this file' }));
+      const d2 = document.createElement('dl');
+      d2.className = 'facts';
+      for (const [k, v] of inv) d2.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: fmt.format(v) }));
+      sec.append(d2);
+      wrap.append(sec);
+    }
+    if (r.warnings.length) {
+      const sec = document.createElement('div');
+      sec.append(Object.assign(document.createElement('p'), { className: 'section-label', textContent: 'Preview limits for this file' }));
+      const ul = document.createElement('ul');
+      ul.className = 'warn';
+      for (const w of r.warnings) ul.append(Object.assign(document.createElement('li'), { textContent: w }));
+      sec.append(ul);
+      wrap.append(sec);
+    }
+  }
+
+  const again = document.createElement('button');
+  again.type = 'button';
+  again.className = 'link-btn';
+  again.textContent = 'Load the sample scene';
+  again.addEventListener('click', loadSample);
+  wrap.append(again);
+  wrap.append(Object.assign(document.createElement('p'), {
+    className: 'hint',
+    textContent: 'Files are read on this device and never uploaded. Opens .blend files from Blender 2.5 to 5.x, plus GLB, OBJ, FBX, STL and PLY exports.',
+  }));
+  root.append(wrap);
+}
+
+// ---------------------------------------------------------------- start with the sample
+function loadSample() {
+  const bin = atob(SAMPLE_BASE64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  openBuffer(SAMPLE_NAME, bytes.buffer);
+}
+resize();
+loadSample();
+</script>
