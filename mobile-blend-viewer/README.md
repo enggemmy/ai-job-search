@@ -4,6 +4,10 @@ A single-file HTML app for opening and previewing Blender `.blend` files on a ph
 
 ## Use it
 
+**On a phone, as a file (works offline):** copy `blend-pocket.html` to the phone (Downloads, Drive, USB). In the Files app, tap it and choose **Chrome** (Android) or open it in **Safari** (iOS). Everything is bundled inside, so no internet is needed. Avoid the "HTML Viewer" option on Android: it cannot show a file picker.
+
+**Hosted:**
+
 - **Open `index.html`** from any static host (GitHub Pages, Netlify, or any web server), tap **Open**, and pick a `.blend` from Files, iCloud Drive, Google Drive or Downloads.
 - On iOS/Android, use the browser's *Add to Home Screen* to launch it like an app.
 - You need to be online the first time: three.js and the zstd decoder load from the jsDelivr CDN.
@@ -44,7 +48,7 @@ No gzip file was in that set, so gzip was tested separately with a gzipped Blend
 npm install
 npm test                      # parser regression test on the embedded sample
 npm test -- path/to/file.blend # also parse your own files
-npm run build                 # rebuild index.html from src/
+npm run build                 # rebuild index.html and blend-pocket.html from src/
 ```
 
 ## Layout
@@ -53,9 +57,10 @@ npm run build                 # rebuild index.html from src/
 src/app.html          viewer UI (three.js), edited by hand
 src/blend-parser.js   .blend reader, no DOM or three.js dependency (runs in Node too)
 src/sample-blend.js   embedded sample scene (Blender 5.0, zstd)
-tools/build.mjs       inlines src/ into the single-file index.html
+tools/build.mjs       builds index.html (CDN) and, with --offline, blend-pocket.html (fully bundled)
 tools/make_sample.py  regenerates the sample scene with the `bpy` module
-index.html            built single-file app, the file to host or open
+blend-pocket.html     built offline single file (three.js bundled), the file to copy to a phone
+index.html            built single file that loads three.js from the CDN, for hosting
 ```
 
 ## Known limits

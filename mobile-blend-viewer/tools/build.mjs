@@ -1,8 +1,10 @@
-// Builds the single-file app: inlines blend-parser.js and sample-blend.js into
-// index.html so the viewer ships as one .html file (three.js and the zstd
-// decoder still load from the jsDelivr CDN).
+// Builds the single-file app from src/.
 //
-//   node tools/build.mjs                        -> index.html (standalone page)
+//   node tools/build.mjs --offline              -> blend-pocket.html: everything bundled
+//                                                  (three.js, zstd decoder, parser, sample).
+//                                                  Save it on a phone and open it; no network needed.
+//   node tools/build.mjs                        -> index.html: parser and sample inlined,
+//                                                  three.js + zstd decoder from the jsDelivr CDN
 //   node tools/build.mjs --fragment <out.html>  -> body-only fragment for hosts that
 //                                                  supply their own <html>/<head> wrapper
 //   add --share-url <https://...> to either       -> public link offered when an in-app
@@ -14,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (f) => fs.readFileSync(path.join(root, 'src', f), 'utf8');
 const fragment = process.argv.includes('--fragment');
+const offline = process.argv.includes('--offline');
 
 // Wrap the parser in a function scope so its helpers cannot collide with the page's names.
 const parser = read('blend-parser.js').replace(/^export /gm, '');
@@ -21,12 +24,32 @@ const parserInline = `const { parseBlend } = (() => {\n${parser}\nreturn { parse
 const sampleInline = read('sample-blend.js').replace(/^export /gm, '');
 
 let html = read('app.html');
+
+if (offline) {
+  // Bundle the page's module script with all its imports (three.js from
+  // node_modules, the parser, the sample) into one inline script.
+  const { build } = await import('esbuild');
+  const start = html.indexOf('<script type="importmap">');
+  const modOpen = '<script type="module">';
+  const modStart = html.indexOf(modOpen);
+  const modEnd = html.lastIndexOf('</script>');
+  if (start < 0 || modStart < start || modEnd < modStart) throw new Error('build: script markers not found');
+  const entry = html.slice(modStart + modOpen.length, modEnd);
+  const result = await build({
+    stdin: { contents: entry, resolveDir: path.join(root, 'src'), loader: 'js', sourcefile: 'app.js' },
+    bundle: true, format: 'esm', minify: true, write: false, target: 'es2020', legalComments: 'eof',
+  });
+  const bundle = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
+  html = html.slice(0, start) + `${modOpen}\n${bundle}\n</script>` + html.slice(modEnd + '</script>'.length);
+}
 const swap = (from, to) => {
   if (!html.includes(from)) throw new Error(`build: marker not found: ${from}`);
   html = html.replace(from, () => to);
 };
-swap("import { parseBlend } from './blend-parser.js';", parserInline);
-swap("import { SAMPLE_NAME, SAMPLE_BASE64 } from './sample-blend.js';", sampleInline);
+if (!offline) {
+  swap("import { parseBlend } from './blend-parser.js';", parserInline);
+  swap("import { SAMPLE_NAME, SAMPLE_BASE64 } from './sample-blend.js';", sampleInline);
+}
 
 // --share-url <url>: the page's public link, offered when an in-app browser blocks the file picker.
 const shareIdx = process.argv.indexOf('--share-url');
@@ -44,7 +67,8 @@ if (!fragment) {
   html = html.replace('html, body { height: 100%; }',
     'html, body { height: 100%; }\n  :root { padding-top: env(safe-area-inset-top, 0px); box-sizing: border-box; }');
 }
-const out = fragment ? path.resolve(process.argv[process.argv.indexOf('--fragment') + 1]) : path.join(root, 'index.html');
+const out = fragment ? path.resolve(process.argv[process.argv.indexOf('--fragment') + 1])
+  : path.join(root, offline ? 'blend-pocket.html' : 'index.html');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, html);
 console.log(`wrote ${out} (${(html.length / 1024).toFixed(0)} KB)`);

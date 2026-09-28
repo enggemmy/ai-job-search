@@ -4,10 +4,12 @@
   "description": "Mobile-friendly HTML viewer for Blender .blend files",
   "type": "module",
   "scripts": {
-    "build": "node tools/build.mjs",
+    "build": "node tools/build.mjs && node tools/build.mjs --offline",
     "test": "node tools/test-parser.mjs"
   },
   "devDependencies": {
-    "fzstd": "0.1.1"
+    "esbuild": "0.24.0",
+    "fzstd": "0.1.1",
+    "three": "0.170.0"
   }
 }
