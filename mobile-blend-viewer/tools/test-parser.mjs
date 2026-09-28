@@ -17,6 +17,7 @@ const EXPECTED = {
   Heptagon: [0, 2.5, 0.01, 7, 1, 0],
   Camera: [7, -7, 5],
   Sun: [3, 3, 6],
+  Fill: [-3, -2.5, 2.5],
 };
 
 const r = await parseBlend(Buffer.from(SAMPLE_BASE64, 'base64'), { zstdDecompress });
@@ -39,6 +40,16 @@ assert.deepEqual(crate.groups.map((g) => [g.materialIndex, g.count / 3]), [[0, 6
 assert.equal(r.objects.find((o) => o.name === 'Suzanne').mesh.smoothRatio, 1, 'Suzanne saved smooth');
 assert.equal(crate.smoothRatio, 0, 'Crate saved flat');
 assert.equal(r.objects.find((o) => o.name === 'Antenna').parent, 'Suzanne');
+// Render settings: active camera, lens, lights, output size, world.
+const cam = r.objects.find((o) => o.id === r.scene.cameraId);
+assert.equal(cam && cam.name, 'Camera', 'scene camera');
+assert.equal(cam.camera.lens, 40, 'camera lens');
+assert.deepEqual(r.scene.resolution, [1600, 1000], 'render resolution');
+const sun = r.objects.find((o) => o.name === 'Sun').light;
+assert.equal(sun.kind, 'sun'); assert.equal(sun.energy, 3);
+const fill = r.objects.find((o) => o.name === 'Fill').light;
+assert.equal(fill.kind, 'point'); assert.equal(fill.energy, 300);
+assert.ok(Math.abs(r.scene.world.color[1] - 0.065) < 1e-6, 'world colour');
 console.log(`sample scene: ${r.objects.length} objects OK`);
 
 // Any extra files given on the command line must at least parse.

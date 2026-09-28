@@ -13,6 +13,12 @@ A single-file HTML app for opening and previewing Blender `.blend` files on a ph
 - You need to be online the first time: three.js and the zstd decoder load from the jsDelivr CDN.
 - Also opens common exports: GLB/glTF (embedded), OBJ, FBX, STL, PLY.
 
+**Render (F12):** the camera button on the rail makes a finished image.
+- *Path traced* (Cycles-like: real shadows, bounce light, progressive samples) or *Fast* (instant, shadow maps).
+- Uses the file's scene camera (lens, sensor fit, orthographic, shift), its lights (point, sun, spot and area, converted from watts the way Blender's glTF exporter does), its world colour and its render resolution. You can also choose *This view* and *Studio* lighting.
+- Background: world colour or transparent. **Save PNG** downloads the image; **Share** appears where the browser supports sharing files.
+- Materials use the viewport colour, metallic and roughness only; node shaders and textures from .blend files are not rendered. Files older than Blender 2.80 render with studio lighting, because their light units differ.
+
 Viewport controls: drag to orbit, pinch to zoom, two-finger drag to pan, and tap an object or an Outliner row to select it. The rail has Frame, Shading (Solid / Material / Wire), View (Persp / Front / Right / Top) and Normals (Auto / Flat / Smooth). On a desktop keyboard, Blender's numpad keys work: 1 / 3 / 7 / 5, `.`, Home and Z.
 
 ## What it reads

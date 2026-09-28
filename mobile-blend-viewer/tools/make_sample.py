@@ -17,7 +17,13 @@ bpy.ops.mesh.primitive_torus_add(location=(-2.3,0,0.4)); t=bpy.context.object; t
 t.data.materials.append(mat("Coral",(0.95,0.35,0.35)))
 bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.25, depth=0.6, location=(0,0,0.9)); ch=bpy.context.object; ch.name="Antenna"; ch.parent=s; ch.matrix_parent_inverse = s.matrix_world.inverted()
 bpy.ops.mesh.primitive_plane_add(size=8); bpy.context.object.name="Floor"
-bpy.ops.object.camera_add(location=(7,-7,5)); bpy.ops.object.light_add(type='SUN', location=(3,3,6))
+bpy.ops.object.camera_add(location=(7,-7,5), rotation=(math.radians(64), 0, math.radians(45))); cam=bpy.context.object; cam.data.lens=40
+bpy.context.scene.camera = cam
+bpy.ops.object.light_add(type='SUN', location=(3,3,6), rotation=(math.radians(35), math.radians(10), math.radians(35))); bpy.context.object.data.energy = 3
+bpy.ops.object.light_add(type='POINT', location=(-3,-2.5,2.5)); fill=bpy.context.object; fill.name="Fill"; fill.data.energy=300; fill.data.color=(1.0,0.75,0.55)
+bpy.context.scene.render.resolution_x=1600; bpy.context.scene.render.resolution_y=1000; bpy.context.scene.render.resolution_percentage=100
+if bpy.context.scene.world is None: bpy.context.scene.world = bpy.data.worlds.new("World")
+bpy.context.scene.world.color=(0.06,0.065,0.075)
 # ngon test
 bpy.ops.mesh.primitive_circle_add(vertices=7, fill_type='NGON', location=(0,2.5,0.01)); bpy.context.object.name="Heptagon"
 bpy.context.view_layer.update()

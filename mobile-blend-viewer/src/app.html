@@ -202,6 +202,75 @@
   .link-btn { justify-self: start; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
   .hint { color: var(--faint); font-size: 12px; margin: 0; }
 
+  /* Render settings dialog and result view */
+  .modal {
+    position: fixed; inset: 0; z-index: 20;
+    display: grid; align-items: end; justify-items: center;
+    background: color-mix(in srgb, #000 55%, transparent);
+    padding-inline: 0;
+  }
+  .modal-card {
+    width: 100%; max-width: 30rem; max-height: 92%;
+    overflow-y: auto; overscroll-behavior: contain;
+    background: var(--chrome); border: 1px solid var(--line); border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    display: grid; gap: 14px;
+  }
+  .modal-card h2 { margin: 0; font-size: 18px; }
+  .modal-card .sub { margin: -8px 0 0; color: var(--muted); font-size: 13px; }
+  .field { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+  .field legend, .field > label { padding: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg label { position: relative; flex: 1 1 auto; min-width: 0; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span {
+    display: block; text-align: center; padding: 9px 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--raised); cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px;
+  }
+  .seg small { display: block; font-size: 11px; color: var(--muted); }
+  .seg input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--raised)); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg input:disabled + span { opacity: .4; cursor: not-allowed; }
+  .field select {
+    font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 10px; width: 100%;
+  }
+  .render-summary { font: 12.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .note { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn { padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--raised); color: var(--text); font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .render-view {
+    position: fixed; inset: 0; z-index: 30;
+    display: grid; grid-template-rows: auto 1fr auto;
+    background: #0e0f11;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .rv-head { display: grid; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--chrome); }
+  .rv-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .rv-title strong { font-size: 15px; }
+  .rv-title span { font: 12.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .progress { height: 4px; border-radius: 2px; background: var(--raised-2); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+  .rv-body { min-height: 0; display: grid; place-items: center; padding: 12px 16px; overflow: hidden; }
+  .rv-body canvas {
+    max-width: 100%; max-height: 100%; width: auto; height: auto; display: block;
+    border-radius: 6px; box-shadow: 0 8px 40px #0008;
+    /* chequerboard shows through transparent renders */
+    background: repeating-conic-gradient(#2a2c30 0 25%, #1f2124 0 50%) 0 0 / 20px 20px;
+  }
+  .rv-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 12px 16px; background: var(--chrome); border-top: 1px solid var(--line); }
+
+  @media (min-width: 900px) {
+    .modal { align-items: center; padding-inline: 16px; }
+    .modal-card { border-radius: 18px; border-bottom: 1px solid var(--line); }
+  }
+
   @media (min-width: 900px) {
     .stage { margin-right: 340px; }
     .sheet:not(.open) .tabs, .sheet:not(.open) .panel { visibility: visible; }
@@ -263,6 +332,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18c3-9 13-9 16 0"/><path d="M4 18h16" stroke-opacity=".5"/></svg>
         <small id="smoothLabel">Auto</small>
       </button>
+      <button class="tool" id="renderBtn" type="button" title="Render an image (F12)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4Z"/><circle cx="12" cy="13" r="3.6"/></svg>
+        <small>Render</small>
+      </button>
       <button class="tool" id="gridBtn" type="button" aria-pressed="true" title="Floor grid">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
         <small>Grid</small>
@@ -286,6 +359,86 @@
       <div class="panel" id="fileInfo" role="tabpanel" aria-labelledby="tabFile" hidden></div>
     </section>
   </main>
+</div>
+
+<div class="modal" id="renderPanel" hidden role="dialog" aria-modal="true" aria-labelledby="renderTitle">
+  <form class="modal-card" id="renderForm">
+    <h2 id="renderTitle">Render</h2>
+    <p class="sub" id="renderSub">Make a finished image of the scene.</p>
+
+    <fieldset class="field">
+      <legend>Engine</legend>
+      <div class="seg">
+        <label><input type="radio" name="engine" id="engPath" value="path" checked><span>Path traced<small>Real shadows and bounce light</small></span></label>
+        <label><input type="radio" name="engine" id="engFast" value="fast"><span>Fast<small>Instant, shadow maps</small></span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Camera</legend>
+      <div class="seg">
+        <label><input type="radio" name="camera" id="camScene" value="scene"><span id="camSceneLabel">Scene camera</span></label>
+        <label><input type="radio" name="camera" id="camView" value="view" checked><span>This view</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Lighting</legend>
+      <div class="seg">
+        <label><input type="radio" name="lighting" id="lightFile" value="file"><span id="lightFileLabel">From file</span></label>
+        <label><input type="radio" name="lighting" id="lightStudio" value="studio" checked><span>Studio</span></label>
+      </div>
+    </fieldset>
+
+    <div class="field">
+      <label for="renderSize">Size</label>
+      <select id="renderSize">
+        <option value="640">Draft (640 px)</option>
+        <option value="1280" selected>Standard (1280 px)</option>
+        <option value="1920">High (1920 px)</option>
+        <option value="file" id="sizeFileOpt">As set in Blender</option>
+      </select>
+    </div>
+
+    <fieldset class="field" id="samplesField">
+      <legend>Samples</legend>
+      <div class="seg">
+        <label><input type="radio" name="samples" id="spp16" value="16"><span>16</span></label>
+        <label><input type="radio" name="samples" id="spp64" value="64" checked><span>64</span></label>
+        <label><input type="radio" name="samples" id="spp256" value="256"><span>256</span></label>
+        <label><input type="radio" name="samples" id="spp1024" value="1024"><span>1024</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Background</legend>
+      <div class="seg">
+        <label><input type="radio" name="background" id="bgWorld" value="world" checked><span>World colour</span></label>
+        <label><input type="radio" name="background" id="bgClear" value="transparent"><span>Transparent</span></label>
+      </div>
+    </fieldset>
+
+    <p class="render-summary" id="renderSummary"></p>
+    <p class="note" id="renderNote" hidden></p>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="renderCancel">Cancel</button>
+      <button type="submit" class="btn primary" id="renderGo">Render</button>
+    </div>
+  </form>
+</div>
+
+<div class="render-view" id="renderView" hidden role="dialog" aria-modal="true" aria-labelledby="rvTitle">
+  <div class="rv-head">
+    <div class="rv-title"><strong id="rvTitle">Rendering…</strong><span id="rvStats"></span></div>
+    <div class="progress" aria-hidden="true"><i id="rvBar"></i></div>
+  </div>
+  <div class="rv-body" id="rvBody"></div>
+  <div class="rv-actions">
+    <button type="button" class="btn" id="rvStop">Stop</button>
+    <button type="button" class="btn primary" id="rvSave" disabled>Save PNG</button>
+    <button type="button" class="btn" id="rvShare" hidden disabled>Share</button>
+    <button type="button" class="btn" id="rvClose">Close</button>
+  </div>
 </div>
 
 <script>
@@ -314,7 +467,10 @@
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-    "fzstd": "https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm"
+    "fzstd": "https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm",
+    "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js",
+    "three-gpu-pathtracer": "https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.23/build/index.module.js"
   }
 }
 </script>
@@ -524,10 +680,12 @@ function clearScene() {
     const mats = o.userData.slotMats;
     if (mats) [].concat(mats).forEach((m) => m.dispose());
     if (o.userData.solidMat) o.userData.solidMat.dispose();
+    for (const parts of Object.values(o.userData.renderGeo || {})) for (const p of parts) p.geometry.dispose();
   });
   content.clear();
   state.entries = [];
   state.selected = null;
+  state.blend = null;
 }
 
 // Small wire glyphs for cameras, lights and empties so the layout reads.
@@ -584,7 +742,7 @@ function buildFromBlend(result) {
     obj.matrix.fromArray(o.matrix);
     obj.name = o.name;
     content.add(obj);
-    state.entries.push({ name: o.name, typeName: o.typeName, parent: o.parent, object3d: obj, meta, mesh: o.mesh, modifiers: o.hasModifiers, hidden: false });
+    state.entries.push({ name: o.name, typeName: o.typeName, parent: o.parent, object3d: obj, meta, mesh: o.mesh, modifiers: o.hasModifiers, hidden: false, src: o });
   }
   content.updateMatrixWorld(true);
 }
@@ -665,6 +823,7 @@ async function openBuffer(name, buffer) {
       result = await parseBlend(buffer, { zstdDecompress });
       if (token !== loadToken) return;
       clearScene();
+      state.blend = result;
       buildFromBlend(result);
     } else if (['glb', 'gltf', 'obj', 'fbx', 'stl', 'ply'].includes(ext)) {
       clearScene();
@@ -893,7 +1052,11 @@ $('gridBtn').addEventListener('click', (e) => {
 
 // Blender's numpad conventions on desktop keyboards.
 addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!$('renderPanel').hidden || !$('renderView').hidden) {
+    if (e.key === 'Escape') { if (!$('renderView').hidden) closeRenderView(); else closeRenderPanel(); }
+    return;
+  }
   const k = e.code;
   if (k === 'Numpad1' || e.key === '1') setView(1);
   else if (k === 'Numpad3' || e.key === '3') setView(2);
@@ -902,6 +1065,7 @@ addEventListener('keydown', (e) => {
   else if (k === 'Home') frameAll();
   else if (k === 'NumpadDecimal' || e.key === '.') frameSelected();
   else if (e.key === 'z' || e.key === 'Z') cycleShading();
+  else if (k === 'F12') openRenderPanel();
   else return;
   e.preventDefault();
 });
@@ -1063,6 +1227,476 @@ function renderFileInfo(name, size, r) {
   }));
   root.append(wrap);
 }
+
+// ---------------------------------------------------------------- rendering
+// A Blender-style F12: build a separate scene from the file's camera, lights
+// and world (or a studio setup), then either path trace it progressively or
+// rasterise it once with shadow maps, on its own WebGL canvas.
+
+const MAX_PIXELS = 3840 * 2160;
+
+function sceneCameraEntry() {
+  const id = state.blend?.scene?.cameraId;
+  return id ? state.entries.find((e) => e.src?.id === id && e.src.camera && e.src.camera.type !== 'panoramic') : null;
+}
+function fileLights() {
+  if (!state.blend || state.blend.legacyLightUnits) return [];
+  return state.entries.filter((e) => e.src?.light && !e.hidden);
+}
+
+function renderSettings() {
+  const v = (name) => document.querySelector(`#renderForm input[name="${name}"]:checked`)?.value;
+  return {
+    engine: v('engine'), camera: v('camera'), lighting: v('lighting'),
+    samples: Number(v('samples')), background: v('background'), size: $('renderSize').value,
+  };
+}
+
+function renderDimensions(opts) {
+  let aspect;
+  if (opts.camera === 'scene' && state.blend?.scene) {
+    const [x, y] = state.blend.scene.resolution;
+    aspect = x / y;
+  } else {
+    aspect = (canvas.clientWidth || 16) / (canvas.clientHeight || 9);
+  }
+  let w, h;
+  if (opts.size === 'file' && state.blend?.scene) {
+    const { resolution: [x, y], resolutionPercent: pct } = state.blend.scene;
+    w = Math.round((x * pct) / 100);
+    h = Math.round((y * pct) / 100);
+    if (opts.camera !== 'scene') h = Math.round(w / aspect);
+  } else {
+    const long = Number(opts.size) || 1280;
+    if (aspect >= 1) { w = long; h = Math.round(long / aspect); } else { h = long; w = Math.round(long * aspect); }
+  }
+  const k = Math.min(1, Math.sqrt(MAX_PIXELS / (w * h)));
+  return { width: Math.max(16, Math.round(w * k)), height: Math.max(16, Math.round(h * k)), capped: k < 1 };
+}
+
+function refreshRenderPanel() {
+  const opts = renderSettings();
+  const cam = sceneCameraEntry();
+  const lights = fileLights();
+  const scene = state.blend?.scene;
+  $('camScene').disabled = !cam;
+  $('camSceneLabel').textContent = cam
+    ? `${cam.name} · ${cam.src.camera.type === 'orthographic' ? 'ortho' : `${Math.round(cam.src.camera.lens)} mm`}`
+    : 'Scene camera';
+  $('lightFile').disabled = !lights.length;
+  $('lightFileLabel').textContent = lights.length ? `From file · ${lights.length} light${lights.length === 1 ? '' : 's'}` : 'From file';
+  const sizeOpt = $('sizeFileOpt');
+  sizeOpt.disabled = !scene;
+  sizeOpt.textContent = scene
+    ? `As set in Blender (${Math.round((scene.resolution[0] * scene.resolutionPercent) / 100)} × ${Math.round((scene.resolution[1] * scene.resolutionPercent) / 100)})`
+    : 'As set in Blender';
+  if ($('camScene').disabled && $('camScene').checked) $('camView').checked = true;
+  if ($('lightFile').disabled && $('lightFile').checked) $('lightStudio').checked = true;
+  if (sizeOpt.disabled && $('renderSize').value === 'file') $('renderSize').value = '1280';
+  $('samplesField').hidden = opts.engine !== 'path';
+  const d = renderDimensions(renderSettings());
+  const o = renderSettings();
+  $('renderSummary').textContent = `${d.width} × ${d.height} px${o.engine === 'path' ? ` · ${o.samples} samples` : ''}${d.capped ? ' · capped at 4K' : ''}`;
+  const notes = [];
+  if (state.blend?.legacyLightUnits && state.entries.some((e) => e.src?.light)) notes.push('Lights in files from before Blender 2.80 use old units, so this file renders with studio lighting.');
+  if (state.entries.some((e) => e.modifiers)) notes.push('Modifiers are not applied, so objects render as their base mesh.');
+  $('renderNote').hidden = !notes.length;
+  $('renderNote').textContent = notes.join(' ');
+}
+
+function openRenderPanel() {
+  if (!state.entries.some((e) => e.mesh)) { toast('Open a file with meshes to render'); return; }
+  // Default to the file's own camera and lights when it has them.
+  if (!state.renderDefaultsFor || state.renderDefaultsFor !== state.blend) {
+    state.renderDefaultsFor = state.blend;
+    if (sceneCameraEntry()) $('camScene').checked = true; else $('camView').checked = true;
+    if (fileLights().length) $('lightFile').checked = true; else $('lightStudio').checked = true;
+  }
+  refreshRenderPanel();
+  $('renderPanel').hidden = false;
+  $('renderGo').focus();
+}
+function closeRenderPanel() { $('renderPanel').hidden = true; }
+
+$('renderBtn').addEventListener('click', openRenderPanel);
+$('renderCancel').addEventListener('click', closeRenderPanel);
+$('renderPanel').addEventListener('click', (e) => { if (e.target === $('renderPanel')) closeRenderPanel(); });
+$('renderForm').addEventListener('change', refreshRenderPanel);
+$('renderForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  closeRenderPanel();
+  startRender(renderSettings());
+});
+
+// Linear-light gradient environment (equirect) - Z-up worlds rotate it below.
+function gradientEnvironment(top, bottom) {
+  const w = 64, h = 32;
+  const data = new Float32Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const t = Math.min(1, Math.max(0, (y / (h - 1) - 0.35) / 0.3)); // horizon band
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      data[i] = bottom.r + (top.r - bottom.r) * t;
+      data[i + 1] = bottom.g + (top.g - bottom.g) * t;
+      data[i + 2] = bottom.b + (top.b - bottom.b) * t;
+      data[i + 3] = 1;
+    }
+  }
+  const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.magFilter = tex.minFilter = THREE.LinearFilter;
+  tex.flipY = true;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Render geometry: one non-indexed piece per material slot. The path tracer
+// (three-gpu-pathtracer 0.0.23) maps materials per mesh, not per geometry
+// group, so a multi-material mesh must be split for colours to land right.
+function renderGeometry(mesh, flat) {
+  const cache = (mesh.userData.renderGeo ||= {});
+  const key = flat ? 'flat' : 'smooth';
+  if (cache[key]) return cache[key];
+  // Per-triangle vertices: the path tracer stores material ids per vertex, so
+  // shared corners between faces of different materials must be split.
+  let g = mesh.geometry;
+  if (g.index) {
+    if (!flat && !g.attributes.normal) g.computeVertexNormals();
+    g = g.toNonIndexed();
+  } else {
+    g = g.clone();
+  }
+  if (flat || !g.attributes.normal) g.computeVertexNormals();
+  const groups = g.groups.length ? g.groups : [{ start: 0, count: g.attributes.position.count, materialIndex: 0 }];
+  if (groups.length === 1) {
+    g.clearGroups();
+    return (cache[key] = [{ geometry: g, materialIndex: groups[0].materialIndex }]);
+  }
+  const parts = groups.map(({ start, count, materialIndex }) => {
+    const part = new THREE.BufferGeometry();
+    for (const [name, attr] of Object.entries(g.attributes)) {
+      const n = attr.itemSize;
+      part.setAttribute(name, new THREE.BufferAttribute(attr.array.slice(start * n, (start + count) * n), n, attr.normalized));
+    }
+    return { geometry: part, materialIndex };
+  });
+  g.dispose();
+  return (cache[key] = parts);
+}
+
+function buildRenderScene(opts, width, height) {
+  const scene = new THREE.Scene();
+  const disposables = [];
+  const box = new THREE.Box3();
+
+  for (const e of state.entries) {
+    const src = e.object3d;
+    if (!e.mesh || e.hidden || !src.isMesh || !src.visible) continue;
+    const flat = state.normals === 'auto' ? src.userData.autoFlat : state.normals === 'flat';
+    const mats = [].concat(src.userData.slotMats).map((m) => {
+      const c = m.clone();
+      c.flatShading = false;
+      c.polygonOffset = false;
+      c.side = THREE.DoubleSide;
+      disposables.push(c);
+      return c;
+    });
+    for (const part of renderGeometry(src, flat)) {
+      const mesh = new THREE.Mesh(part.geometry, mats[Math.min(part.materialIndex, mats.length - 1)]);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(src.matrixWorld);
+      mesh.castShadow = mesh.receiveShadow = true;
+      scene.add(mesh);
+      mesh.updateMatrixWorld(true);
+      box.expandByObject(mesh);
+    }
+  }
+  if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(2, 2, 2));
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const center = sphere.center, radius = Math.max(sphere.radius, 0.01);
+
+  // Camera
+  const aspect = width / height;
+  let cam;
+  const sc = opts.camera === 'scene' ? sceneCameraEntry() : null;
+  if (sc) {
+    const c = sc.src.camera;
+    const horizontalFit = c.sensorFit === 'horizontal' || (c.sensorFit === 'auto' && aspect >= 1);
+    if (c.type === 'orthographic') {
+      const half = c.orthoScale / 2;
+      const hw = horizontalFit ? half : half * aspect;
+      const hh = horizontalFit ? half / aspect : half;
+      cam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, c.clipStart, c.clipEnd);
+    } else {
+      const sensor = c.sensorFit === 'vertical' ? c.sensorY : c.sensorX;
+      const halfAngle = Math.atan(sensor / 2 / c.lens);
+      const vfov = horizontalFit ? 2 * Math.atan(Math.tan(halfAngle) / aspect) : 2 * halfAngle;
+      cam = new THREE.PerspectiveCamera(THREE.MathUtils.radToDeg(vfov), aspect, c.clipStart, c.clipEnd);
+    }
+    const m = new THREE.Matrix4().fromArray(sc.src.matrix);
+    const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+    m.decompose(pos, quat, scl);
+    cam.position.copy(pos);
+    cam.quaternion.copy(quat);
+    if (c.shiftX || c.shiftY) {
+      const big = Math.max(width, height);
+      cam.setViewOffset(width, height, c.shiftX * big, -c.shiftY * big, width, height);
+    }
+  } else {
+    cam = new THREE.PerspectiveCamera(camera.fov, aspect, camera.near, camera.far);
+    cam.position.copy(camera.position);
+    cam.quaternion.copy(camera.quaternion);
+  }
+  cam.updateProjectionMatrix();
+  cam.updateMatrixWorld();
+
+  // World and lights
+  const useFile = opts.lighting === 'file' && fileLights().length;
+  const worldColor = new THREE.Color();
+  const wc = state.blend?.scene?.world?.color;
+  if (useFile && wc) worldColor.setRGB(wc[0], wc[1], wc[2], THREE.LinearSRGBColorSpace);
+  else worldColor.set(0x2a2c30);
+
+  let env;
+  if (useFile) {
+    env = gradientEnvironment(worldColor, worldColor);
+  } else {
+    env = gradientEnvironment(new THREE.Color(0.78, 0.82, 0.9), new THREE.Color(0.08, 0.07, 0.065));
+    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    const dir = new THREE.Vector3(-0.45, 0.55, -0.7).normalize();
+    aimDirectional(key, dir, center, radius);
+    scene.add(key, key.target);
+    const rim = new THREE.DirectionalLight(0xcfe0ff, 0.7);
+    aimDirectional(rim, new THREE.Vector3(0.6, -0.3, -0.5).normalize(), center, radius);
+    rim.castShadow = false;
+    scene.add(rim, rim.target);
+  }
+  disposables.push(env);
+  scene.environment = env;
+  scene.environmentIntensity = useFile ? 1 : 0.9;
+  // Equirect maps are Y-up; Blender scenes are Z-up.
+  scene.environmentRotation.set(Math.PI / 2, 0, 0);
+  scene.backgroundRotation.set(Math.PI / 2, 0, 0);
+  scene.background = opts.background === 'transparent' ? null : worldColor.clone();
+
+  if (useFile) {
+    for (const e of fileLights()) {
+      const L = e.src.light;
+      const m = new THREE.Matrix4().fromArray(e.src.matrix);
+      const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+      m.decompose(pos, quat, scl);
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+      const color = new THREE.Color().setRGB(L.color[0], L.color[1], L.color[2], THREE.LinearSRGBColorSpace);
+      // Blender watts to three.js intensities, the same conversion the
+      // Blender glTF exporter uses in its "compatibility" light mode.
+      if (L.kind === 'sun') {
+        const light = new THREE.DirectionalLight(color, L.energy);
+        aimDirectional(light, dir, center, radius);
+        scene.add(light, light.target);
+      } else if (L.kind === 'spot') {
+        const light = new THREE.SpotLight(color, L.energy / (4 * Math.PI), 0, Math.min(L.spotSize / 2, Math.PI / 2 - 0.01), L.spotBlend, 2);
+        light.position.copy(pos);
+        light.target.position.copy(pos).add(dir);
+        light.castShadow = true;
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.camera.near = Math.max(0.01, radius / 500);
+        scene.add(light, light.target);
+      } else if (L.kind === 'area') {
+        const w = Math.max(1e-3, L.sizeX * scl.x), h = Math.max(1e-3, (L.areaShape === 'rectangle' || L.areaShape === 'ellipse' ? L.sizeY : L.sizeX) * scl.y);
+        const light = new THREE.RectAreaLight(color, L.energy / (Math.PI * w * h), w, h);
+        light.position.copy(pos);
+        light.quaternion.copy(quat);
+        scene.add(light);
+      } else {
+        const light = new THREE.PointLight(color, L.energy / (4 * Math.PI), 0, 2);
+        light.position.copy(pos);
+        light.castShadow = true;
+        light.shadow.mapSize.set(1024, 1024);
+        light.shadow.camera.near = Math.max(0.01, radius / 500);
+        scene.add(light);
+      }
+    }
+  }
+  scene.updateMatrixWorld(true);
+  return { scene, camera: cam, disposables };
+}
+
+function aimDirectional(light, dir, center, radius) {
+  light.position.copy(center).addScaledVector(dir, -radius * 3);
+  light.target.position.copy(center);
+  light.castShadow = true;
+  const s = light.shadow;
+  s.mapSize.set(2048, 2048);
+  s.camera.left = s.camera.bottom = -radius * 1.2;
+  s.camera.right = s.camera.top = radius * 1.2;
+  s.camera.near = radius * 0.5;
+  s.camera.far = radius * 6;
+  s.bias = -0.0004;
+  s.normalBias = radius * 0.004;
+}
+
+const job = { active: false, stop: false, renderer: null, tracer: null, canvas: null, disposables: [], pmrem: null, name: 'render' };
+
+function setRenderProgress(title, stats, fraction) {
+  $('rvTitle').textContent = title;
+  $('rvStats').textContent = stats;
+  $('rvBar').style.width = `${Math.round(Math.min(1, fraction) * 100)}%`;
+}
+const clock = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+
+let rectAreaReady = false;
+async function startRender(opts) {
+  if (job.active) return;
+  const { width, height } = renderDimensions(opts);
+  $('renderView').hidden = false;
+  $('rvBody').innerHTML = '';
+  $('rvSave').disabled = true;
+  $('rvShare').disabled = true;
+  $('rvStop').hidden = false;
+  $('rvStop').disabled = false;
+  setRenderProgress('Preparing scene…', `${width} × ${height}`, 0);
+  job.active = true;
+  job.stop = false;
+  job.name = ($('fileName').textContent || 'render').replace(/\.[^.]+$/, '') + '-render.png';
+  await nextFrame();
+
+  try {
+    const { scene: rs, camera: rc, disposables } = buildRenderScene(opts, width, height);
+    job.disposables = disposables;
+    const out = document.createElement('canvas');
+    out.width = width;
+    out.height = height;
+    out.setAttribute('role', 'img');
+    out.setAttribute('aria-label', 'Rendered image');
+    $('rvBody').append(out);
+    job.canvas = out;
+    const r = new THREE.WebGLRenderer({ canvas: out, antialias: opts.engine === 'fast', alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    job.renderer = r;
+    r.setPixelRatio(1);
+    r.setSize(width, height, false);
+    r.toneMapping = THREE.NeutralToneMapping;
+    r.setClearColor(0x000000, 0);
+    const t0 = performance.now();
+
+    if (opts.engine === 'fast') {
+      if (rs.children.some((o) => o.isRectAreaLight) && !rectAreaReady) {
+        const { RectAreaLightUniformsLib } = await import('three/addons/lights/RectAreaLightUniformsLib.js');
+        RectAreaLightUniformsLib.init();
+        rectAreaReady = true;
+      }
+      r.shadowMap.enabled = true;
+      r.shadowMap.type = THREE.PCFSoftShadowMap;
+      job.pmrem = new THREE.PMREMGenerator(r);
+      const envTarget = job.pmrem.fromEquirectangular(rs.environment);
+      disposables.push(envTarget);
+      rs.environment = envTarget.texture;
+      r.render(rs, rc);
+      finishRender(`Done in ${clock(performance.now() - t0)}`, `${width} × ${height} · fast`);
+      return;
+    }
+
+    setRenderProgress('Loading path tracer…', `${width} × ${height}`, 0);
+    await nextFrame();
+    const { WebGLPathTracer } = await import('three-gpu-pathtracer');
+    if (job.stop) { finishRender('Stopped', ''); return; }
+    const pt = new WebGLPathTracer(r);
+    job.tracer = pt;
+    pt.renderDelay = 0;
+    pt.minSamples = 0;
+    pt.fadeDuration = 0;
+    pt.rasterizeScene = false;
+    pt.bounces = 6;
+    pt.filterGlossyFactor = 0.5;
+    // Tiles keep each frame short so phones stay responsive.
+    const tiles = width * height > 1.2e6 ? 3 : 2;
+    pt.tiles.set(tiles, tiles);
+    setRenderProgress('Building BVH…', `${width} × ${height}`, 0);
+    await nextFrame();
+    pt.setScene(rs, rc);
+    const target = opts.samples;
+    const step = () => {
+      if (job.stop || !job.active) {
+        finishRender(`Stopped at ${Math.floor(pt.samples)} samples`, `${width} × ${height} · ${clock(performance.now() - t0)}`);
+        return;
+      }
+      pt.renderSample();
+      const done = Math.floor(pt.samples);
+      setRenderProgress('Rendering…', `${done} / ${target} samples · ${clock(performance.now() - t0)}`, pt.samples / target);
+      if (done > 0) $('rvSave').disabled = false;
+      if (pt.samples >= target) {
+        finishRender(`Done in ${clock(performance.now() - t0)}`, `${width} × ${height} · ${target} samples`);
+        return;
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  } catch (err) {
+    console.error(err);
+    finishRender('Render failed', '');
+    $('rvBody').innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = /context|memory|allocate/i.test(String(err && err.message))
+      ? 'This device ran out of graphics memory. Try a smaller size or the Fast engine.'
+      : `Could not render: ${err && err.message ? err.message : err}`;
+    $('rvBody').append(p);
+  }
+}
+
+function finishRender(title, stats) {
+  job.active = false;
+  setRenderProgress(title, stats, 1);
+  $('rvStop').hidden = true;
+  $('rvSave').disabled = !job.canvas;
+  shareSupport();
+}
+
+async function renderBlob() {
+  return new Promise((res) => job.canvas.toBlob(res, 'image/png'));
+}
+async function shareSupport() {
+  const btn = $('rvShare');
+  btn.hidden = true;
+  if (!job.canvas || !navigator.canShare) return;
+  try {
+    const probe = new File([new Blob()], job.name, { type: 'image/png' });
+    if (navigator.canShare({ files: [probe] })) { btn.hidden = false; btn.disabled = false; }
+  } catch { /* not supported */ }
+}
+
+$('rvStop').addEventListener('click', () => { job.stop = true; $('rvStop').disabled = true; });
+$('rvSave').addEventListener('click', async () => {
+  if (!job.canvas) return;
+  const blob = await renderBlob();
+  if (!blob) { toast('Could not create the image'); return; }
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: job.name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  toast(`Saved ${job.name}`);
+});
+$('rvShare').addEventListener('click', async () => {
+  const blob = await renderBlob();
+  if (!blob) return;
+  try { await navigator.share({ files: [new File([blob], job.name, { type: 'image/png' })], title: job.name }); }
+  catch (err) { if (err && err.name !== 'AbortError') toast('Sharing is not available here. Use Save PNG.'); }
+});
+
+function closeRenderView() {
+  job.stop = true;
+  job.active = false;
+  try { job.tracer && job.tracer.dispose(); } catch { /* ignore */ }
+  for (const d of job.disposables) d.dispose && d.dispose();
+  if (job.pmrem) job.pmrem.dispose();
+  if (job.renderer) { job.renderer.dispose(); job.renderer.forceContextLoss(); }
+  Object.assign(job, { tracer: null, renderer: null, canvas: null, disposables: [], pmrem: null });
+  $('rvBody').innerHTML = '';
+  $('renderView').hidden = true;
+  requestRender();
+}
+$('rvClose').addEventListener('click', closeRenderView);
 
 // ---------------------------------------------------------------- start with the sample
 function loadSample() {

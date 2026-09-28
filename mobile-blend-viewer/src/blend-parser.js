@@ -669,6 +669,81 @@ function storedWorldMatrix(ob) {
 }
 
 // ---------------------------------------------------------------------------
+// Cameras, lights, scene render settings
+
+const LIGHT_KINDS = { 0: 'point', 1: 'sun', 2: 'spot', 3: 'sun', 4: 'area' };
+const SENSOR_FITS = { 0: 'auto', 1: 'horizontal', 2: 'vertical' };
+const CAMERA_TYPES = { 0: 'perspective', 1: 'orthographic', 2: 'panoramic' };
+
+function readCamera(file, key) {
+  const b = file.block(key);
+  if (!b || b.code !== 'CA') return null;
+  const ca = file.view(b, 'Camera');
+  return {
+    name: file.idName(ca),
+    type: CAMERA_TYPES[ca.numOr('type', 0)] || 'perspective',
+    lens: ca.numOr('lens', 50),
+    sensorX: ca.numOr('sensor_x', 36),
+    sensorY: ca.numOr('sensor_y', 24),
+    sensorFit: SENSOR_FITS[ca.numOr('sensor_fit', 0)] || 'auto',
+    orthoScale: ca.numOr('ortho_scale', 6),
+    clipStart: ca.has('clip_start') ? ca.num('clip_start') : ca.numOr('clipsta', 0.1),
+    clipEnd: ca.has('clip_end') ? ca.num('clip_end') : ca.numOr('clipend', 100),
+    shiftX: ca.numOr('shiftx', 0),
+    shiftY: ca.numOr('shifty', 0),
+  };
+}
+
+function readLight(file, key) {
+  const b = file.block(key);
+  if (!b || b.code !== 'LA') return null;
+  const la = file.view(b, 'Lamp') || file.view(b, 'Light');
+  if (!la) return null;
+  return {
+    name: file.idName(la),
+    kind: LIGHT_KINDS[la.numOr('type', 0)] || 'point',
+    color: [la.numOr('r', 1), la.numOr('g', 1), la.numOr('b', 1)],
+    // Watts for point/spot/area, W/m² (irradiance) for sun. Pre-2.80 files use
+    // an older unitless scale; see `legacyLightUnits` on the result.
+    energy: la.numOr('energy', 1),
+    spotSize: la.numOr('spotsize', Math.PI / 4),
+    spotBlend: la.numOr('spotblend', 0.15),
+    radius: la.numOr('radius', la.numOr('area_size', 0.1)),
+    areaShape: ['square', 'rectangle', 'disk', 'ellipse'][la.numOr('area_shape', 0)] || 'square',
+    sizeX: la.numOr('area_size', 1),
+    sizeY: la.numOr('area_sizey', la.numOr('area_size', 1)),
+  };
+}
+
+function readScene(file) {
+  let scKey = null;
+  const glob = file.blocks.find((b) => b.code === 'GLOB');
+  if (glob) {
+    const fg = file.view(glob, 'FileGlobal');
+    if (fg && fg.has('curscene')) scKey = fg.ptr('curscene');
+  }
+  let b = file.block(scKey);
+  if (!b || b.code !== 'SC') b = file.blocks.find((x) => x.code === 'SC');
+  if (!b) return null;
+  const sc = file.view(b, 'Scene');
+  const r = sc.has('r') ? sc.sub('r') : null;
+  let world = null;
+  const wb = sc.has('world') ? file.block(sc.ptr('world')) : null;
+  if (wb && wb.code === 'WO') {
+    const wo = file.view(wb, 'World');
+    world = { name: file.idName(wo), color: [wo.numOr('horr', 0.05), wo.numOr('horg', 0.05), wo.numOr('horb', 0.05)] };
+  }
+  const camKey = sc.has('camera') ? sc.ptr('camera') : null;
+  return {
+    name: file.idName(sc),
+    cameraId: camKey && file.block(camKey) ? camKey : null,
+    resolution: r ? [r.numOr('xsch', 1920), r.numOr('ysch', 1080)] : [1920, 1080],
+    resolutionPercent: r ? r.numOr('size', 100) : 100,
+    world,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Thumbnail ("TEST" block: int width, int height, RGBA rows bottom-up)
 
 function readThumbnail(file) {
@@ -747,6 +822,8 @@ export async function parseBlend(input, options = {}) {
       hasModifiers: Boolean(mods),
       mesh: null,
     };
+    if (type === 11) o.camera = readCamera(file, ob.ptr('data'));
+    if (type === 10) o.light = readLight(file, ob.ptr('data'));
     if (type === 1) {
       const mesh = meshFor(ob.ptr('data'));
       if (mesh && !mesh.error) o.mesh = mesh;
@@ -776,6 +853,9 @@ export async function parseBlend(input, options = {}) {
     dataSize: bytes.length,
     blockCount: file.blocks.length,
     thumbnail: readThumbnail(file),
+    scene: readScene(file),
+    // Blender 2.80 changed light units to watts; older energies are not comparable.
+    legacyLightUnits: header.versionCode < 280,
     inventory,
     objects,
     warnings,
