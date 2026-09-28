@@ -67,8 +67,14 @@
     background: var(--accent); color: var(--accent-ink); font-weight: 600;
     cursor: pointer; white-space: nowrap;
   }
+  .btn-open { position: relative; overflow: hidden; }
   .btn-open svg { width: 16px; height: 16px; }
   .btn-open:active { transform: translateY(1px); }
+  .btn-open:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }
+  .file-overlay {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; font-size: 100px; /* large font: the whole button is the tap target on every engine */
+  }
   @media (max-width: 420px) { .brand span { display: none; } }
 
   /* Viewport */
@@ -217,11 +223,14 @@
       <span class="file-name" id="fileName">No file</span>
       <span class="chip" id="fileChip" hidden></span>
     </div>
-    <button class="btn-open" id="openBtn" type="button">
+    <!-- The file input itself covers the button: tapping it opens the native
+         picker directly. A script-triggered input.click() on a hidden input is
+         ignored by iOS Safari and many in-app web views. -->
+    <label class="btn-open" id="openLabel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       Open
-    </button>
-    <input type="file" id="fileInput" hidden>
+      <input type="file" id="fileInput" class="file-overlay" aria-label="Open a .blend or 3D model file">
+    </label>
   </header>
 
   <main class="stage" id="stage">
@@ -270,6 +279,27 @@
   </main>
 </div>
 
+<script>
+  // Startup check. If the viewer module fails to load (CDN blocked, offline,
+  // or a browser without import maps), say so instead of leaving a dead UI.
+  (function () {
+    function fail(why) {
+      if (window.__blendPocketReady) return;
+      var el = document.getElementById('status');
+      el.hidden = false;
+      el.innerHTML = '<div class="status-card error"><h2>The 3D viewer didn\u2019t start</h2><p></p></div>';
+      el.querySelector('p').textContent = why;
+    }
+    window.addEventListener('error', function (e) {
+      var src = e && e.target && (e.target.src || e.target.href);
+      if (src && /jsdelivr/.test(src)) fail('Couldn\u2019t download the 3D engine from cdn.jsdelivr.net. Check your connection, or whether your network blocks that site, then reload.');
+    }, true);
+    if (!(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) {
+      fail('This browser is too old for the viewer. Update iOS/Safari (16.4 or newer) or use a current Chrome, then reload.');
+    }
+    setTimeout(function () { fail('The viewer is taking too long to load. Check your connection and reload. If you are inside an app, try opening this page in Safari or Chrome.'); }, 15000);
+  })();
+</script>
 <script type="importmap">
 {
   "imports": {
@@ -286,6 +316,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { decompress as zstdDecompress } from 'fzstd';
 import { parseBlend } from './blend-parser.js';
 import { SAMPLE_NAME, SAMPLE_BASE64 } from './sample-blend.js';
+
+window.__blendPocketReady = true;
 
 // Blender is Z-up; keep its coordinates as-is and make three.js Z-up instead.
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
@@ -659,7 +691,6 @@ async function openFile(file) {
   }
 }
 
-$('openBtn').addEventListener('click', () => $('fileInput').click());
 $('fileInput').addEventListener('change', (e) => { openFile(e.target.files[0]); e.target.value = ''; });
 
 let dragDepth = 0;
@@ -952,7 +983,7 @@ function renderFileInfo(name, size, r) {
   again.type = 'button';
   again.className = 'link-btn';
   again.textContent = 'Load the sample scene';
-  again.addEventListener('click', loadSample);
+  again.addEventListener('click', () => loadSample());
   wrap.append(again);
   wrap.append(Object.assign(document.createElement('p'), {
     className: 'hint',
