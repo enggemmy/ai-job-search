@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Needed from phase 2 (TMDB). Unused by the provider test screen. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        Scoped package visibility (Android 11+): we declare only the four verified provider
+        packages plus one intent kind (https VIEW), instead of QUERY_ALL_PACKAGES. The packages
+        let us check install state and launch each app; the intent lets queryIntentActivities()
+        see which apps can handle an https link.
+    -->
+    <queries>
+        <!--
+            Verified provider phone apps (Google Play listings, checked 2026-11-06; see
+            domain/Provider.kt). Keep identical to Provider.packageName; ManifestQueriesTest
+            fails the build on any difference.
+        -->
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="com.apple.atve.androidtv.appletv" />
+
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.UnifiedStreamingHub">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.UnifiedStreamingHub">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
