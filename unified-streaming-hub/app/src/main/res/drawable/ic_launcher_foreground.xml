@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple play triangle; placeholder icon for the PoC. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,32 L42,76 L78,54 Z" />
+</vector>
