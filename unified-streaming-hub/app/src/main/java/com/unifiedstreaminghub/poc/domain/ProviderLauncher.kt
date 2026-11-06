@@ -1,27 +1,33 @@
 package com.unifiedstreaminghub.poc.domain
 
 /**
- * Detects handlers for a provider title URL and opens it, classifying the outcome honestly.
+ * Detects install state / URL handlers for a provider and launches it, classifying each attempt.
  *
- * Strategy (all documented Android behaviour, no provider-specific knowledge):
- *  1. Ask the package manager which activities can handle `ACTION_VIEW <url>`.
- *  2. Ask the same for a neutral probe URL to learn which of those are generic browsers.
- *     Handlers of the title URL that are not in that set are "non-browser handlers".
- *  3. To open: try `FLAG_ACTIVITY_REQUIRE_NON_BROWSER`; if nothing non-browser matches,
- *     fall back to a plain VIEW (browser); if even that fails, report a missing handler.
+ * Title launch routes, tried in order (all documented Android behaviour; no custom schemes):
+ *  1. ACTION_VIEW restricted to the provider's verified package. Success means that exact app
+ *     has an activity registered for the URL and the system accepted the request.
+ *  2. ACTION_VIEW with FLAG_ACTIVITY_REQUIRE_NON_BROWSER. Success means some *other* non-browser
+ *     app took it (reported as such, never as the provider app).
+ *  3. Plain ACTION_VIEW, which resolves to a browser. Reported as browser fallback.
  *
- * Limits that the log text repeats on purpose:
- *  - A non-browser handler is not proof that it is the provider's app; the package name is
- *    shown so the tester can judge.
- *  - "Browser fallback" cannot distinguish "app not installed" from "app installed but does not
- *    claim this link" (unverified App Link, or link-handling switched off in system settings).
- *  - startActivity() success means the system accepted the request. It says nothing about
- *    playback, the title existing, or the account being entitled.
+ * What the log text repeats on purpose:
+ *  - Every success means "Android accepted the request". It is not evidence that the title
+ *    screen appeared or that playback started; only a person looking at the phone can tell.
+ *  - Route 1 can fail even though the app is installed (the app does not register this URL);
+ *    that is how "title-specific launch unsupported for this link" is detected, per provider.
+ *  - NOT_INSTALLED relies on package visibility; apps in another profile (for example Samsung
+ *    Secure Folder) are invisible and would be reported as not installed.
+ *
+ * Every step is appended to the entry's trail and also sent to [diag] (Logcat in production).
  */
 class ProviderLauncher(
     private val gateway: IntentGateway,
+    private val deviceInfo: String = "",
+    private val diag: (String) -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
+    fun installInfo(provider: Provider): InstallInfo = gateway.installInfo(provider.packageName)
+
     fun detect(rawUrl: String): Detection {
         val url = when (val check = UrlValidator.validate(rawUrl)) {
             is UrlCheck.Invalid -> return Detection(DetectionStatus.INVALID_URL, note = check.reason)
@@ -45,77 +51,202 @@ class ProviderLauncher(
         return Detection(status, nonBrowsers, browsers, note)
     }
 
-    fun open(provider: Provider, rawUrl: String): LogEntry {
-        val url = when (val check = UrlValidator.validate(rawUrl)) {
-            is UrlCheck.Invalid -> return entry(
-                provider, LaunchOutcome.REJECTED_INPUT, rawUrl.trim(),
-                "No intent sent", check.reason,
+    /** Launch the provider app's home screen (no title). */
+    fun launchApp(provider: Provider): LogEntry {
+        val t = Trace(provider)
+        val pkg = provider.packageName
+        t.add("action: launch app home, package $pkg")
+        val install = gateway.installInfo(pkg)
+        t.add("install state: ${describe(install)}")
+
+        if (install.state == InstallState.NOT_INSTALLED) {
+            return t.entry(
+                LaunchKind.APP_HOME, LaunchOutcome.MISSING_APP, null,
+                "${provider.displayName} is not installed", "No intent sent.",
             )
-            is UrlCheck.Valid -> check.url
         }
-
-        val detection = detect(url)
-        val handlerText = describeHandlers(detection)
-
-        return when (val first = gateway.startRequiringNonBrowser(url)) {
+        return when (val r = gateway.launchApp(pkg)) {
             StartResult.Started -> {
-                val mismatch = if (detection.status != DetectionStatus.NON_BROWSER_HANDLER) {
-                    " Pre-check found no non-browser handler, so the system chose a handler we did not predict."
-                } else {
-                    ""
-                }
-                entry(
-                    provider, LaunchOutcome.APP_LAUNCH_REQUESTED, url,
-                    "A non-browser app accepted the launch request",
-                    "$handlerText $NOT_PLAYBACK$mismatch".trim(),
+                t.add("launch intent accepted by system")
+                t.entry(
+                    LaunchKind.APP_HOME, LaunchOutcome.APP_LAUNCH_REQUESTED, null,
+                    "Launch request for the ${provider.displayName} app accepted",
+                    "This only starts the app. It says nothing about sign-in or playback.",
                 )
             }
 
-            StartResult.NoActivity -> openInBrowser(provider, url, detection)
-            is StartResult.Failed -> entry(
-                provider, LaunchOutcome.UNKNOWN, url,
-                "Launch failed before a handler was chosen", first.error,
-            )
+            StartResult.NoActivity -> {
+                t.add("no launcher activity returned for $pkg")
+                val outcome = if (install.state == InstallState.INSTALLED) {
+                    LaunchOutcome.UNKNOWN
+                } else {
+                    LaunchOutcome.MISSING_APP
+                }
+                t.entry(
+                    LaunchKind.APP_HOME, outcome, null,
+                    "Could not find a launcher activity for ${provider.displayName}",
+                    if (install.state == InstallState.INSTALLED) {
+                        "Reported installed but not launchable (disabled, restricted profile, or no launcher activity)."
+                    } else {
+                        "Install state was unknown, so this may simply mean the app is not installed."
+                    },
+                )
+            }
+
+            is StartResult.Failed -> {
+                t.add("launch failed: ${r.error}")
+                t.entry(LaunchKind.APP_HOME, LaunchOutcome.UNKNOWN, null, "Launch failed", r.error)
+            }
         }
     }
 
-    private fun openInBrowser(provider: Provider, url: String, detection: Detection): LogEntry =
-        when (val second = gateway.startAny(url)) {
-            StartResult.Started -> entry(
-                provider, LaunchOutcome.BROWSER_FALLBACK, url,
-                "No non-browser app handled the URL; sent to a browser",
-                "The provider app is either not installed or does not claim this link " +
-                    "(unverified App Link or link-handling disabled); this test cannot tell which. " +
-                    NOT_PLAYBACK,
-            )
+    /** Open a title URL in the provider app if it accepts it, otherwise fall back. */
+    fun open(provider: Provider, rawUrl: String): LogEntry {
+        val t = Trace(provider)
+        val pkg = provider.packageName
 
-            StartResult.NoActivity -> entry(
-                provider, LaunchOutcome.MISSING_APP, url,
-                "Nothing on this device can handle the URL",
-                "No app and no browser matched. Pre-check: ${detection.status.label}.",
-            )
+        val url = when (val check = UrlValidator.validate(rawUrl)) {
+            is UrlCheck.Invalid -> {
+                t.add("input rejected: ${check.reason}")
+                return t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.REJECTED_INPUT, rawUrl.trim(),
+                    "No intent sent", check.reason,
+                )
+            }
 
-            is StartResult.Failed -> entry(
-                provider, LaunchOutcome.UNKNOWN, url,
-                "Browser fallback failed unexpectedly", second.error,
-            )
+            is UrlCheck.Valid -> {
+                t.add("action: open title, host ${check.host}")
+                check.url
+            }
         }
 
-    private fun describeHandlers(detection: Detection): String =
-        if (detection.nonBrowserHandlers.isEmpty()) {
-            "Pre-check: ${detection.status.label}."
+        val install = gateway.installInfo(pkg)
+        t.add("install state ($pkg): ${describe(install)}")
+        val detection = detect(url)
+        t.add(
+            "handlers for URL: non-browser=${detection.nonBrowserHandlers.map { it.packageName }}, " +
+                "browsers=${detection.browserHandlers.size}",
+        )
+
+        // Route 1: the verified provider package itself.
+        if (install.state == InstallState.NOT_INSTALLED) {
+            t.add("route 1 (verified package) skipped: not installed")
         } else {
-            "Non-browser handler(s): " +
-                detection.nonBrowserHandlers.joinToString { "${it.label} (${it.packageName})" } + "."
+            when (val r = gateway.startInPackage(pkg, url)) {
+                StartResult.Started -> {
+                    t.add("route 1: $pkg accepted ACTION_VIEW")
+                    return t.entry(
+                        LaunchKind.TITLE_URL, LaunchOutcome.APP_LAUNCH_REQUESTED, url,
+                        "${provider.displayName} app accepted the title URL",
+                        "Explicit launch into $pkg. $NOT_PLAYBACK",
+                    )
+                }
+
+                StartResult.NoActivity ->
+                    t.add("route 1: $pkg has no activity registered for this URL")
+
+                is StartResult.Failed -> {
+                    t.add("route 1 failed: ${r.error}")
+                    return t.entry(
+                        LaunchKind.TITLE_URL, LaunchOutcome.UNKNOWN, url,
+                        "Launch into ${provider.displayName} failed", r.error,
+                    )
+                }
+            }
         }
 
-    private fun entry(
-        provider: Provider,
-        outcome: LaunchOutcome,
-        url: String,
-        summary: String,
-        detail: String?,
-    ) = LogEntry(clock(), provider, outcome, url, summary, detail)
+        // Route 2: some other non-browser app.
+        when (val r = gateway.startRequiringNonBrowser(url)) {
+            StartResult.Started -> {
+                t.add("route 2: a non-browser app accepted ACTION_VIEW")
+                val who = detection.nonBrowserHandlers.joinToString { "${it.label} (${it.packageName})" }
+                return t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.APP_LAUNCH_REQUESTED, url,
+                    "A non-browser app other than the verified ${provider.displayName} package accepted the URL",
+                    "Expected handler(s): ${who.ifEmpty { "none predicted" }}. $NOT_PLAYBACK",
+                )
+            }
+
+            StartResult.NoActivity -> t.add("route 2: no non-browser app handles this URL")
+            is StartResult.Failed -> {
+                t.add("route 2 failed: ${r.error}")
+                return t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.UNKNOWN, url,
+                    "Launch failed before a handler was chosen", r.error,
+                )
+            }
+        }
+
+        // Route 3: browser.
+        return when (val r = gateway.startAny(url)) {
+            StartResult.Started -> {
+                t.add("route 3: sent to a browser")
+                t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.BROWSER_FALLBACK, url,
+                    when (install.state) {
+                        InstallState.INSTALLED ->
+                            "${provider.displayName} is installed but does not accept this URL; opened in a browser"
+
+                        InstallState.NOT_INSTALLED ->
+                            "${provider.displayName} is not installed; opened in a browser"
+
+                        InstallState.UNKNOWN ->
+                            "No app took this URL; opened in a browser (install state unknown)"
+                    },
+                    "Title-specific launch is not available for this link on this device. " +
+                        "Use Launch application to open the app, or test another official link. $NOT_PLAYBACK",
+                )
+            }
+
+            StartResult.NoActivity -> {
+                t.add("route 3: no browser or app can handle the URL")
+                t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.MISSING_APP, url,
+                    "Nothing on this device can handle the URL",
+                    "No app and no browser matched. Pre-check: ${detection.status.label}.",
+                )
+            }
+
+            is StartResult.Failed -> {
+                t.add("route 3 failed: ${r.error}")
+                t.entry(
+                    LaunchKind.TITLE_URL, LaunchOutcome.UNKNOWN, url,
+                    "Browser fallback failed unexpectedly", r.error,
+                )
+            }
+        }
+    }
+
+    private fun describe(i: InstallInfo): String = buildString {
+        append(i.state.label)
+        i.versionName?.let { append(", version $it") }
+        i.detail?.let { append(" ($it)") }
+    }
+
+    /** Collects the diagnostic steps of one attempt and forwards each to [diag]. */
+    private inner class Trace(private val provider: Provider) {
+        private val steps = mutableListOf<String>()
+
+        init {
+            if (deviceInfo.isNotBlank()) add("device: $deviceInfo")
+        }
+
+        fun add(step: String) {
+            steps += step
+            diag("[${provider.displayName}] $step")
+        }
+
+        fun entry(
+            kind: LaunchKind,
+            outcome: LaunchOutcome,
+            url: String?,
+            summary: String,
+            detail: String?,
+        ): LogEntry {
+            add("result: ${outcome.label}")
+            return LogEntry(clock(), provider, kind, outcome, url, summary, detail, steps.toList())
+        }
+    }
 
     companion object {
         /**

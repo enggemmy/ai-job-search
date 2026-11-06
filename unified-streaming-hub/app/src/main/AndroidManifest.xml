@@ -5,12 +5,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
-        Scoped package visibility (Android 11+): we declare the *kind of intent* we resolve,
-        not package names. This lets queryIntentActivities() see which apps can handle an
-        https VIEW link, without QUERY_ALL_PACKAGES and without hard-coding any provider
-        package identifier.
+        Scoped package visibility (Android 11+): we declare only the four verified provider
+        packages plus one intent kind (https VIEW), instead of QUERY_ALL_PACKAGES. The packages
+        let us check install state and launch each app; the intent lets queryIntentActivities()
+        see which apps can handle an https link.
     -->
     <queries>
+        <!--
+            Verified provider phone apps (Google Play listings, checked 2026-11-06; see
+            domain/Provider.kt). Keep identical to Provider.packageName; ManifestQueriesTest
+            fails the build on any difference.
+        -->
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="com.apple.atve.androidtv.appletv" />
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />

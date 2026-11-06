@@ -6,18 +6,40 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.util.Log
 import com.unifiedstreaminghub.poc.domain.HandlerInfo
+import com.unifiedstreaminghub.poc.domain.InstallInfo
+import com.unifiedstreaminghub.poc.domain.InstallState
 import com.unifiedstreaminghub.poc.domain.IntentGateway
 import com.unifiedstreaminghub.poc.domain.StartResult
 
 /**
- * Production [IntentGateway]. Pass an Activity context so the launch joins the app's task;
+ * Production [IntentGateway]. Pass an Activity context so launches join the app's task;
  * a non-Activity context gets FLAG_ACTIVITY_NEW_TASK added.
  *
- * Package visibility: [resolveHandlers] relies on the `<queries>` VIEW/BROWSABLE/https intent
- * declared in AndroidManifest.xml. Without it, Android 11+ returns an empty list.
+ * Package visibility (Android 11+): [installInfo] and [launchApp] only see the four provider
+ * packages listed in the manifest `<queries>`; [resolveHandlers] relies on the declared
+ * VIEW/BROWSABLE/https intent. Needs no root, no accessibility service, no QUERY_ALL_PACKAGES.
  */
 class AndroidIntentGateway(private val context: Context) : IntentGateway {
+
+    override fun installInfo(packageName: String): InstallInfo {
+        val pm = context.packageManager
+        return try {
+            val info = pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+            val enabled = info.applicationInfo?.enabled ?: true
+            InstallInfo(
+                InstallState.INSTALLED,
+                info.versionName,
+                if (enabled) null else "disabled in system settings",
+            )
+        } catch (e: PackageManager.NameNotFoundException) {
+            InstallInfo(InstallState.NOT_INSTALLED)
+        } catch (e: RuntimeException) {
+            InstallInfo(InstallState.UNKNOWN, detail = "${e::class.java.simpleName}: ${e.message}")
+        }
+    }
 
     override fun resolveHandlers(url: String): List<HandlerInfo> {
         val pm = context.packageManager
@@ -30,6 +52,18 @@ class AndroidIntentGateway(private val context: Context) : IntentGateway {
             emptyList()
         }
     }
+
+    override fun launchApp(packageName: String): StartResult {
+        val intent = try {
+            context.packageManager.getLaunchIntentForPackage(packageName)
+        } catch (e: RuntimeException) {
+            return StartResult.Failed("${e::class.java.simpleName}: ${e.message}")
+        } ?: return StartResult.NoActivity
+        return start(intent)
+    }
+
+    override fun startInPackage(packageName: String, url: String): StartResult =
+        start(viewIntent(url).setPackage(packageName))
 
     override fun startRequiringNonBrowser(url: String): StartResult =
         start(viewIntent(url).addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER))
@@ -52,4 +86,14 @@ class AndroidIntentGateway(private val context: Context) : IntentGateway {
             StartResult.Failed("${e::class.java.simpleName}: ${e.message}")
         }
     }
+}
+
+object Diagnostics {
+    const val TAG = "UnifiedHub"
+
+    /** Sink for [com.unifiedstreaminghub.poc.domain.ProviderLauncher]. View with `adb logcat -s UnifiedHub`. */
+    val logcat: (String) -> Unit = { Log.i(TAG, it) }
+
+    fun deviceSummary(): String =
+        "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
 }

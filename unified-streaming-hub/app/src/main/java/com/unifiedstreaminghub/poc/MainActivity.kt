@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.unifiedstreaminghub.poc.ui.ProviderTestScreen
+import com.unifiedstreaminghub.poc.ui.HubApp
 import com.unifiedstreaminghub.poc.ui.theme.HubTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HubTheme {
-                ProviderTestScreen()
+                HubApp()
             }
         }
     }

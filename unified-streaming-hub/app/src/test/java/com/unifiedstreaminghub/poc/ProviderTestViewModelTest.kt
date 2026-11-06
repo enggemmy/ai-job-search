@@ -2,6 +2,8 @@ package com.unifiedstreaminghub.poc
 
 import com.unifiedstreaminghub.poc.data.UrlStore
 import com.unifiedstreaminghub.poc.domain.DetectionStatus
+import com.unifiedstreaminghub.poc.domain.InstallState
+import com.unifiedstreaminghub.poc.domain.LaunchKind
 import com.unifiedstreaminghub.poc.domain.LaunchOutcome
 import com.unifiedstreaminghub.poc.domain.Provider
 import com.unifiedstreaminghub.poc.domain.ProviderLauncher
@@ -42,6 +44,40 @@ class ProviderTestViewModelTest {
 
         vm.setUrl(Provider.Netflix, "$url?x=2")
         assertNull(vm.state.value.rows.getValue(Provider.Netflix).detection)
+    }
+
+    @Test
+    fun `install state starts unknown and refresh fills it for every provider`() {
+        val vm = ProviderTestViewModel(MemoryStore())
+        Provider.entries.forEach {
+            assertEquals(InstallState.UNKNOWN, vm.state.value.rows.getValue(it).install.state)
+        }
+        vm.refreshInstall(ProviderLauncher(FakeIntentGateway(install = FakeIntentGateway.INSTALLED)))
+        Provider.entries.forEach {
+            assertEquals(InstallState.INSTALLED, vm.state.value.rows.getValue(it).install.state)
+        }
+    }
+
+    @Test
+    fun `last title result is tracked per provider and ignores app launches`() {
+        val vm = ProviderTestViewModel(MemoryStore())
+        val gateway = FakeIntentGateway(
+            install = FakeIntentGateway.INSTALLED,
+            packageStart = StartResult.Started,
+        )
+        val launcher = ProviderLauncher(gateway)
+        vm.setUrl(Provider.Netflix, url)
+
+        assertNull(vm.state.value.lastTitleResult(Provider.Netflix))
+        vm.open(Provider.Netflix, launcher)
+        gateway.packageStart = StartResult.NoActivity
+        vm.launchApp(Provider.Netflix, launcher) // app-home entry must not replace the title record
+
+        val last = vm.state.value.lastTitleResult(Provider.Netflix)
+        assertEquals(LaunchOutcome.APP_LAUNCH_REQUESTED, last?.outcome)
+        assertEquals(LaunchKind.TITLE_URL, last?.kind)
+        assertNull(vm.state.value.lastTitleResult(Provider.DisneyPlus))
+        assertEquals(2, vm.state.value.log.size)
     }
 
     @Test
